@@ -1,233 +1,367 @@
 ﻿using System;
+using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
+using Microsoft.Win32;
+using Newtonsoft.Json;
 using SmartAI.AI;
 using SmartAI.Data;
-using SmartAI.Models;
+using SmartAI.Services;
 
 namespace SmartAI
 {
     public partial class MainWindow : Window
     {
-        private AIContext _context;
-        private IntelligenceEngine _ai;
+        private readonly AIContext _context;
+        private readonly IntelligenceEngine _engine;
+        private ObservableCollection<ChatMessage> _messages;
+        private ObservableCollection<string> _recentLearning;
 
         public MainWindow()
         {
             InitializeComponent();
-            InitializeAI();
+
+            _context = new AIContext();
+            _context.Database.EnsureCreated();
+
+            _engine = new IntelligenceEngine(_context);
+
+            _messages = new ObservableCollection<ChatMessage>();
+            _recentLearning = new ObservableCollection<string>();
+
+            ChatMessages.ItemsSource = _messages;
+            RecentLearning.ItemsSource = _recentLearning;
+
+            Loaded += MainWindow_Loaded;
         }
 
-        private void InitializeAI()
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            await UpdateStatistics();
+            AddSystemMessage("Sistema inicializado! Estou pronto para aprender e responder perguntas. 🚀");
+        }
+
+        private async void SendButton_Click(object sender, RoutedEventArgs e)
+        {
+            await ProcessUserInput();
+        }
+
+        private async void InputBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter && !string.IsNullOrWhiteSpace(InputBox.Text))
+            {
+                await ProcessUserInput();
+            }
+        }
+
+        private async Task ProcessUserInput()
+        {
+            var input = InputBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(input)) return;
+
+            // Adicionar mensagem do usuário
+            AddUserMessage(input);
+            InputBox.Clear();
+
+            // Mostrar que está processando
+            StatusText.Text = "Processando...";
+            SendButton.IsEnabled = false;
+
             try
             {
-                _context = new AIContext();
-                _context.Database.EnsureCreated();
+                // Processar com a IA
+                var response = await _engine.ProcessInput(input);
 
-                _ai = new IntelligenceEngine(_context);
+                // Adicionar resposta da IA
+                AddAssistantMessage(response);
 
-                AddAIMessage("👋 Olá! Sou uma IA que aprende com você. Me faça perguntas ou me ensine coisas novas!");
-                AddAIMessage("💡 Exemplos:\n• O que é cachorro?\n• Baleia é um mamífero\n• Python é uma linguagem de programação");
-
-                UpdateStats();
-                txtInput.Focus();
+                // Atualizar estatísticas
+                await UpdateStatistics();
             }
             catch (Exception ex)
             {
-                string errorMessage = $"Erro ao inicializar: {ex.Message}";
-                if (ex.InnerException != null)
-                {
-                    errorMessage += $"\nDetalhes: {ex.InnerException.Message}";
-                }
-                MessageBox.Show(errorMessage, "Erro", MessageBoxButton.OK, MessageBoxImage.Error);
-                _ai = null;
-                txtInput.IsEnabled = false;
+                AddSystemMessage($"❌ Erro: {ex.Message}");
+            }
+            finally
+            {
+                StatusText.Text = "Sistema pronto. Ensine-me ou faça perguntas!";
+                SendButton.IsEnabled = true;
+                InputBox.Focus();
             }
         }
 
-        private void BtnSend_Click(object sender, RoutedEventArgs e)
+        private async void SearchWeb_Click(object sender, RoutedEventArgs e)
         {
-            ProcessInput();
-        }
-
-        private void TxtInput_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Enter && !string.IsNullOrWhiteSpace(txtInput.Text))
+            // Usar o novo SearchDialog moderno
+            var dialog = new SearchDialog
             {
-                ProcessInput();
-            }
-        }
+                Owner = this
+            };
 
-        private void ProcessInput()
-        {
-            var input = txtInput.Text.Trim();
-            if (string.IsNullOrWhiteSpace(input))
-                return;
-
-            // Mostra mensagem do usuário
-            AddUserMessage(input);
-            txtInput.Clear();
-
-            // Processa com a IA
-            try
+            if (dialog.ShowDialog() == true)
             {
-                var response = _ai.ProcessQuestion(input);
+                var query = dialog.SearchQuery;
+                if (string.IsNullOrWhiteSpace(query)) return;
 
-                // Salva conversa
-                var conversation = new Conversation
+                AddUserMessage($"🌐 Buscar: {query}");
+
+                StatusText.Text = "Buscando na web...";
+                SendButton.IsEnabled = false;
+
+                try
                 {
-                    UserMessage = input,
-                    AIResponse = response.Message,
-                    LearnedSomething = response.Learned
-                };
-                _context.Conversations.Add(conversation);
-                _context.SaveChanges();
+                    var searchService = new Services.WebSearchService();
+                    var result = await searchService.SmartSearch(query);
 
-                // Mostra resposta
-                AddAIMessage(response.Message, response.Confidence, response.Learned);
-
-                // Se aprendeu algo, mostra sugestão
-                if (response.Learned)
-                {
-                    txtStatus.Text = "✓ Aprendi algo novo! Obrigado!";
-                    txtStatus.Foreground = new SolidColorBrush(Color.FromRgb(87, 242, 135));
-                }
-                else if (response.NeedsMoreInfo)
-                {
-                    txtStatus.Text = "❓ Preciso de mais informações...";
-                    txtStatus.Foreground = new SolidColorBrush(Color.FromRgb(254, 231, 92));
-
-                    if (!string.IsNullOrWhiteSpace(response.SuggestedLearning))
+                    if (result.Success && !string.IsNullOrEmpty(result.Summary))
                     {
-                        AddAIMessage($"💡 Sugestão: {response.SuggestedLearning}");
+                        // PRIMEIRO: Mostrar os resultados
+                        AddAssistantMessage(result.ToString());
+
+                        // Rolar até o final para ver tudo
+                        await Task.Delay(300);
+                        ScrollToBottom();
+
+                        // DEPOIS: Extrair fatos
+                        var facts = searchService.ExtractFacts(result.Summary);
+
+                        if (facts.Any())
+                        {
+                            // Mostrar mensagem que encontrou fatos
+                            AddSystemMessage($"💡 Encontrei {facts.Count} fatos que posso aprender!");
+                            await Task.Delay(300);
+                            ScrollToBottom();
+
+                            // Abrir janela moderna de seleção
+                            var learnDialog = new LearningDialog(facts)
+                            {
+                                Owner = this
+                            };
+
+                            if (learnDialog.ShowDialog() == true && learnDialog.SelectedFacts.Any())
+                            {
+                                var selectedFacts = learnDialog.SelectedFacts;
+                                int learned = 0;
+
+                                AddSystemMessage($"🧠 Processando {selectedFacts.Count} fatos selecionados...");
+
+                                foreach (var fact in selectedFacts)
+                                {
+                                    try
+                                    {
+                                        // Remover numeração (ex: "1. Python é..." -> "Python é...")
+                                        var cleanFact = System.Text.RegularExpressions.Regex.Replace(
+                                            fact, @"^\d+\.\s*", "");
+
+                                        var response = await _engine.ProcessInput(cleanFact);
+                                        if (response.Contains("✅"))
+                                        {
+                                            learned++;
+                                        }
+                                    }
+                                    catch { }
+                                }
+
+                                AddSystemMessage($"✅ Aprendi {learned} de {selectedFacts.Count} conceitos da busca web!");
+                                await UpdateStatistics();
+                            }
+                            else
+                            {
+                                AddSystemMessage("Ok, não vou aprender esses fatos. Você pode me ensinar manualmente quando quiser!");
+                            }
+                        }
+                        else
+                        {
+                            AddSystemMessage("ℹ️ Não consegui extrair fatos estruturados desse resultado, mas você pode me ensinar manualmente!");
+                        }
+                    }
+                    else
+                    {
+                        AddAssistantMessage($"❌ Não encontrei resultados para '{query}'.\n\n" +
+                            $"Erro: {result.Error ?? "Sem informações disponíveis"}");
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    txtStatus.Text = $"Confiança: {response.Confidence:P0}";
-                    txtStatus.Foreground = Brushes.White;
+                    AddSystemMessage($"❌ Erro na busca: {ex.Message}");
                 }
-
-                UpdateStats();
+                finally
+                {
+                    StatusText.Text = "Sistema pronto.";
+                    SendButton.IsEnabled = true;
+                }
             }
-            catch (Exception ex)
+        }
+
+        private async void ImportFile_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new OpenFileDialog
             {
-                AddAIMessage($"❌ Erro: {ex.Message}");
+                Filter = "Arquivos de Texto|*.txt|Todos os Arquivos|*.*",
+                Title = "Importar Conhecimento"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                try
+                {
+                    StatusText.Text = "Importando arquivo...";
+                    var content = await File.ReadAllTextAsync(dialog.FileName);
+                    var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+                    int learned = 0;
+                    foreach (var line in lines)
+                    {
+                        var trimmed = line.Trim();
+                        if (trimmed.Length > 5) // Ignorar linhas muito curtas
+                        {
+                            await _engine.ProcessInput(trimmed);
+                            learned++;
+                        }
+                    }
+
+                    AddSystemMessage($"✅ Arquivo importado! Aprendi {learned} novos conceitos.");
+                    await UpdateStatistics();
+                }
+                catch (Exception ex)
+                {
+                    AddSystemMessage($"❌ Erro ao importar: {ex.Message}");
+                }
+                finally
+                {
+                    StatusText.Text = "Sistema pronto.";
+                }
+            }
+        }
+
+        private async void ExportKnowledge_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new SaveFileDialog
+            {
+                Filter = "JSON|*.json|Texto|*.txt",
+                Title = "Exportar Conhecimento",
+                FileName = $"conhecimento_{DateTime.Now:yyyyMMdd_HHmmss}"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                try
+                {
+                    StatusText.Text = "Exportando conhecimento...";
+
+                    var knowledge = new
+                    {
+                        ExportedAt = DateTime.Now,
+                        Statistics = await _engine.GetStatistics(),
+                        Concepts = _context.Concepts.Select(c => new { c.Name, c.CreatedAt }).ToList(),
+                        Instances = _context.Instances.Select(i => new { i.Name, ConceptId = i.ConceptId }).ToList(),
+                        Properties = _context.InstanceProperties.Select(p => new {
+                            p.PropertyName,
+                            p.PropertyValue
+                        }).ToList()
+                    };
+
+                    var json = JsonConvert.SerializeObject(knowledge, Formatting.Indented);
+                    await File.WriteAllTextAsync(dialog.FileName, json);
+
+                    AddSystemMessage($"✅ Conhecimento exportado para: {Path.GetFileName(dialog.FileName)}");
+                }
+                catch (Exception ex)
+                {
+                    AddSystemMessage($"❌ Erro ao exportar: {ex.Message}");
+                }
+                finally
+                {
+                    StatusText.Text = "Sistema pronto.";
+                }
+            }
+        }
+
+        private void ClearChat_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "Tem certeza que deseja limpar o chat? (O conhecimento será preservado)",
+                "Confirmar",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                _messages.Clear();
+                AddSystemMessage("Chat limpo. Conhecimento preservado.");
             }
         }
 
         private void AddUserMessage(string message)
         {
-            var border = new Border
+            _messages.Add(new ChatMessage
             {
-                Style = (Style)FindResource("MessageBubbleUser")
-            };
-
-            var stack = new StackPanel();
-
-            var label = new TextBlock
-            {
-                Text = "Você",
-                Foreground = new SolidColorBrush(Color.FromRgb(185, 187, 190)),
-                FontSize = 10,
-                Margin = new Thickness(0, 0, 0, 5)
-            };
-            stack.Children.Add(label);
-
-            var text = new TextBlock
-            {
-                Text = message,
-                Style = (Style)FindResource("MessageText")
-            };
-            stack.Children.Add(text);
-
-            border.Child = stack;
-            chatPanel.Children.Add(border);
-
+                Message = message,
+                Sender = "Você",
+                IsUser = true,
+                Timestamp = DateTime.Now.ToString("HH:mm:ss")
+            });
             ScrollToBottom();
         }
 
-        private void AddAIMessage(string message, double confidence = 1.0, bool learned = false)
+        private void AddAssistantMessage(string message)
         {
-            var border = new Border
+            _messages.Add(new ChatMessage
             {
-                Style = (Style)FindResource("MessageBubbleAI")
-            };
-
-            if (learned)
-            {
-                border.BorderBrush = new SolidColorBrush(Color.FromRgb(87, 242, 135));
-                border.BorderThickness = new Thickness(2);
-            }
-
-            var stack = new StackPanel();
-
-            var header = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(0, 0, 0, 5)
-            };
-
-            var label = new TextBlock
-            {
-                Text = "🧠 Smart AI",
-                Foreground = new SolidColorBrush(Color.FromRgb(88, 101, 242)),
-                FontSize = 10,
-                FontWeight = FontWeights.Bold
-            };
-            header.Children.Add(label);
-
-            if (confidence < 1.0 && confidence > 0)
-            {
-                var confLabel = new TextBlock
-                {
-                    Text = $" • {confidence:P0} confiança",
-                    Foreground = new SolidColorBrush(Color.FromRgb(185, 187, 190)),
-                    FontSize = 10,
-                    Margin = new Thickness(5, 0, 0, 0)
-                };
-                header.Children.Add(confLabel);
-            }
-
-            stack.Children.Add(header);
-
-            var text = new TextBlock
-            {
-                Text = message,
-                Style = (Style)FindResource("MessageText")
-            };
-            stack.Children.Add(text);
-
-            border.Child = stack;
-            chatPanel.Children.Add(border);
-
+                Message = message,
+                Sender = "Smart AI",
+                IsUser = false,
+                Timestamp = DateTime.Now.ToString("HH:mm:ss")
+            });
             ScrollToBottom();
         }
 
-        private void UpdateStats()
+        private void AddSystemMessage(string message)
         {
-            var instanceCount = _context.Instances.Count();
-            var conversationCount = _context.Conversations.Count();
-            var learnedCount = _context.Conversations.Count(c => c.LearnedSomething);
-
-            txtKnowledgeCount.Text = $"{instanceCount} itens";
-            txtConversationCount.Text = conversationCount.ToString();
-            txtLearnedCount.Text = $"{learnedCount} coisas";
+            _messages.Add(new ChatMessage
+            {
+                Message = message,
+                Sender = "Sistema",
+                IsUser = false,
+                Timestamp = DateTime.Now.ToString("HH:mm:ss")
+            });
+            ScrollToBottom();
         }
 
         private void ScrollToBottom()
         {
-            scrollChat.ScrollToBottom();
+            ChatScroll.ScrollToEnd();
         }
 
-        protected override void OnClosed(EventArgs e)
+        private async Task UpdateStatistics()
         {
-            _context?.Dispose();
-            base.OnClosed(e);
+            var stats = await _engine.GetStatistics();
+
+            ConceptCount.Text = stats["Concepts"].ToString();
+            InstanceCount.Text = stats["Instances"].ToString();
+            RelationCount.Text = (stats["ConceptProperties"] + stats["InstanceProperties"]).ToString();
+            ConversationCount.Text = stats["Conversations"].ToString();
+
+            // Atualizar aprendizado recente
+            _recentLearning.Clear();
+            var recent = await _engine.GetRecentLearning(5);
+            foreach (var item in recent)
+            {
+                _recentLearning.Add(item);
+            }
         }
+    }
+
+    public class ChatMessage
+    {
+        public string Message { get; set; } = string.Empty;
+        public string Sender { get; set; } = string.Empty;
+        public bool IsUser { get; set; }
+        public string Timestamp { get; set; } = string.Empty;
     }
 }

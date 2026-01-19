@@ -1,25 +1,14 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
 
 namespace SmartAI.Models
 {
     public class InstanceProperty
     {
-        [Key]
         public int Id { get; set; }
-
-        [Required]
         public int InstanceId { get; set; }
-        public Instance Instance { get; set; }
-
-        [Required]
-        [MaxLength(100)]
-        public string PropertyName { get; set; }
-
-        [Required]
-        [MaxLength(500)]
-        public string PropertyValue { get; set; }
-
-        [MaxLength(500)]
-        public string Source { get; set; }
+        public Instance? Instance { get; set; }
+        public string PropertyName { get; set; } = string.Empty;
+        public string PropertyValue { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
 }

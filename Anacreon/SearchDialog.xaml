@@ -1,0 +1,160 @@
+﻿<Window x:Class="SmartAI.SearchDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Buscar na Web" 
+        Height="250" 
+        Width="600"
+        Background="#1E1E1E"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+
+    <Window.Resources>
+        <Style x:Key="ModernButton" TargetType="Button">
+            <Setter Property="Background" Value="#007ACC"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1C97EA"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#3E3E42"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ModernTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="#3C3C3C"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#007ACC"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="CaretBrush" Value="White"/>
+            <Setter Property="SelectionBrush" Value="#264F78"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="60"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="70"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#252526">
+            <Grid>
+                <TextBlock Text="Buscar na Web" 
+                           FontSize="18" 
+                           FontWeight="Bold" 
+                           Foreground="#4EC9B0"
+                           VerticalAlignment="Center"
+                           Margin="20,0"/>
+
+                <Button Content="X" 
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Width="30" 
+                        Height="30"
+                        Background="Transparent"
+                        Foreground="#858585"
+                        BorderThickness="0"
+                        FontSize="14"
+                        FontWeight="Bold"
+                        Click="Close_Click"
+                        Margin="0,0,10,0"/>
+            </Grid>
+        </Border>
+
+        <!-- Search Input -->
+        <Border Grid.Row="1" 
+                Background="#252526" 
+                Margin="20,10,20,10"
+                CornerRadius="4"
+                BorderBrush="#3F3F46"
+                BorderThickness="1">
+            <StackPanel Margin="20" VerticalAlignment="Center">
+                <TextBlock Text="Termo de busca:" 
+                           FontSize="13" 
+                           Foreground="#CCCCCC"
+                           Margin="0,0,0,10"/>
+
+                <Grid>
+                    <TextBox x:Name="SearchTextBox"
+                             Style="{StaticResource ModernTextBox}"
+                             Height="45"
+                             VerticalContentAlignment="Center"
+                             KeyDown="SearchTextBox_KeyDown"
+                             TextChanged="SearchTextBox_TextChanged"
+                             TabIndex="0"
+                             IsTabStop="True"
+                             Focusable="True"/>
+                    <TextBlock x:Name="PlaceholderText"
+                               Text="Digite sua pesquisa aqui..."
+                               Foreground="#666666"
+                               FontSize="14"
+                               IsHitTestVisible="False"
+                               VerticalAlignment="Center"
+                               Margin="14,0,0,0"/>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!-- Action Buttons -->
+        <Border Grid.Row="2" Background="#1E1E1E">
+            <StackPanel Orientation="Horizontal" 
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <Button Content="Buscar" 
+                        Style="{StaticResource ModernButton}"
+                        Click="Search_Click"
+                        Width="150"
+                        Height="40"
+                        Margin="0,0,10,0"/>
+                <Button Content="Cancelar" 
+                        Style="{StaticResource SecondaryButton}"
+                        Click="Cancel_Click"
+                        Width="100"
+                        Height="40"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

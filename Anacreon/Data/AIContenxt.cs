@@ -18,42 +18,32 @@ namespace SmartAI.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            base.OnModelCreating(modelBuilder);
-
-            // Auto-referência de conceitos
+            // Configurar relacionamentos
             modelBuilder.Entity<Concept>()
                 .HasOne(c => c.ParentConcept)
-                .WithMany(c => c.SubConcepts)
+                .WithMany()
                 .HasForeignKey(c => c.ParentConceptId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Índices
-            modelBuilder.Entity<Concept>()
-                .HasIndex(c => c.Name)
-                .IsUnique();
-
             modelBuilder.Entity<Instance>()
-                .HasIndex(i => i.Name);
+                .HasOne(i => i.Concept)
+                .WithMany(c => c.Instances)
+                .HasForeignKey(i => i.ConceptId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-            // ONTOLOGIA BASE
-            SeedData(modelBuilder);
-        }
+            modelBuilder.Entity<ConceptProperty>()
+                .HasOne(cp => cp.Concept)
+                .WithMany(c => c.Properties)
+                .HasForeignKey(cp => cp.ConceptId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-        private void SeedData(ModelBuilder modelBuilder)
-        {
-            // Conceito raiz
-            modelBuilder.Entity<Concept>().HasData(
-                new Concept { Id = 1, Name = "Coisa", Description = "Tudo que existe" }
-            );
+            modelBuilder.Entity<InstanceProperty>()
+                .HasOne(ip => ip.Instance)
+                .WithMany(i => i.Properties)
+                .HasForeignKey(ip => ip.InstanceId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-            // Categorias principais
-            modelBuilder.Entity<Concept>().HasData(
-                new Concept { Id = 10, Name = "Pessoa", Description = "Ser humano ou agente consciente", ParentConceptId = 1 },
-                new Concept { Id = 20, Name = "Lugar", Description = "Local físico ou conceitual", ParentConceptId = 1 },
-                new Concept { Id = 30, Name = "Objeto", Description = "Entidade material inanimada", ParentConceptId = 1 },
-                new Concept { Id = 40, Name = "Conceito Abstrato", Description = "Entidade não física", ParentConceptId = 1 },
-                new Concept { Id = 50, Name = "Evento", Description = "Ocorrência no tempo", ParentConceptId = 1 }
-            );
+            base.OnModelCreating(modelBuilder);
         }
     }
 }
