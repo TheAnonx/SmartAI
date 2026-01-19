@@ -2,10 +2,8 @@
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
 using Microsoft.Win32;
 using Newtonsoft.Json;
@@ -18,7 +16,7 @@ namespace SmartAI
     public partial class MainWindow : Window
     {
         private readonly AIContext _context;
-        private readonly IntelligenceEngine _engine;
+        private readonly EnhancedIntelligenceEngine _engine;
         private ObservableCollection<ChatMessage> _messages;
         private ObservableCollection<string> _recentLearning;
 
@@ -29,7 +27,7 @@ namespace SmartAI
             _context = new AIContext();
             _context.Database.EnsureCreated();
 
-            _engine = new IntelligenceEngine(_context);
+            _engine = new EnhancedIntelligenceEngine(_context);
 
             _messages = new ObservableCollection<ChatMessage>();
             _recentLearning = new ObservableCollection<string>();
@@ -64,23 +62,16 @@ namespace SmartAI
             var input = InputBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(input)) return;
 
-            // Adicionar mensagem do usuário
             AddUserMessage(input);
             InputBox.Clear();
 
-            // Mostrar que está processando
             StatusText.Text = "Processando...";
             SendButton.IsEnabled = false;
 
             try
             {
-                // Processar com a IA
                 var response = await _engine.ProcessInput(input);
-
-                // Adicionar resposta da IA
                 AddAssistantMessage(response);
-
-                // Atualizar estatísticas
                 await UpdateStatistics();
             }
             catch (Exception ex)
@@ -97,7 +88,6 @@ namespace SmartAI
 
         private async void SearchWeb_Click(object sender, RoutedEventArgs e)
         {
-            // Usar o novo SearchDialog moderno
             var dialog = new SearchDialog
             {
                 Owner = this
@@ -115,29 +105,23 @@ namespace SmartAI
 
                 try
                 {
-                    var searchService = new Services.WebSearchService();
+                    var searchService = new WebSearchService();
                     var result = await searchService.SmartSearch(query);
 
                     if (result.Success && !string.IsNullOrEmpty(result.Summary))
                     {
-                        // PRIMEIRO: Mostrar os resultados
                         AddAssistantMessage(result.ToString());
-
-                        // Rolar até o final para ver tudo
                         await Task.Delay(300);
                         ScrollToBottom();
 
-                        // DEPOIS: Extrair fatos
                         var facts = searchService.ExtractFacts(result.Summary);
 
                         if (facts.Any())
                         {
-                            // Mostrar mensagem que encontrou fatos
                             AddSystemMessage($"💡 Encontrei {facts.Count} fatos que posso aprender!");
                             await Task.Delay(300);
                             ScrollToBottom();
 
-                            // Abrir janela moderna de seleção
                             var learnDialog = new LearningDialog(facts)
                             {
                                 Owner = this
@@ -154,7 +138,6 @@ namespace SmartAI
                                 {
                                     try
                                     {
-                                        // Remover numeração (ex: "1. Python é..." -> "Python é...")
                                         var cleanFact = System.Text.RegularExpressions.Regex.Replace(
                                             fact, @"^\d+\.\s*", "");
 
@@ -218,7 +201,7 @@ namespace SmartAI
                     foreach (var line in lines)
                     {
                         var trimmed = line.Trim();
-                        if (trimmed.Length > 5) // Ignorar linhas muito curtas
+                        if (trimmed.Length > 5)
                         {
                             await _engine.ProcessInput(trimmed);
                             learned++;
@@ -347,7 +330,6 @@ namespace SmartAI
             RelationCount.Text = (stats["ConceptProperties"] + stats["InstanceProperties"]).ToString();
             ConversationCount.Text = stats["Conversations"].ToString();
 
-            // Atualizar aprendizado recente
             _recentLearning.Clear();
             var recent = await _engine.GetRecentLearning(5);
             foreach (var item in recent)

@@ -29,7 +29,13 @@ namespace SmartAI
             }
         }
 
-        public bool DialogResult { get; private set; }
+        // Usar bool? para compatibilidade com ShowDialog()
+        private bool _dialogResult = false;
+        public new bool DialogResult
+        {
+            get => _dialogResult;
+            private set => _dialogResult = value;
+        }
 
         public LearningDialog(List<string> facts)
         {
@@ -40,16 +46,34 @@ namespace SmartAI
 
             Facts = new ObservableCollection<FactItem>();
 
+            // Adicionar fatos sem numeração manual
             for (int i = 0; i < facts.Count; i++)
             {
-                Facts.Add(new FactItem
+                var factText = facts[i].Trim();
+
+                // Remover numeração se já existir
+                var cleanedFact = System.Text.RegularExpressions.Regex.Replace(
+                    factText, @"^[\d\•\-\*]+\.?\s*", "").Trim();
+
+                if (!string.IsNullOrWhiteSpace(cleanedFact))
                 {
-                    Text = facts[i], // Removi a numeração manual
-                    IsSelected = true // Todos selecionados por padrão
-                });
+                    Facts.Add(new FactItem
+                    {
+                        Text = cleanedFact,
+                        IsSelected = true // Todos selecionados por padrão
+                    });
+                }
             }
 
-            SubtitleText.Text = $"Selecione quais dos {facts.Count} fatos você quer que eu aprenda:";
+            if (Facts.Count > 0)
+            {
+                SubtitleText.Text = $"Selecione quais dos {Facts.Count} fato(s) você quer que eu aprenda:";
+            }
+            else
+            {
+                SubtitleText.Text = "Nenhum fato disponível para aprender.";
+                LearnButton.IsEnabled = false;
+            }
 
             UpdateLearnButton();
         }
@@ -84,35 +108,63 @@ namespace SmartAI
             if (selectedCount == 0)
             {
                 MessageBox.Show(
-                    "Selecione pelo menos um fato para aprender!",
-                    "Atenção",
+                    "Por favor, selecione pelo menos um fato para aprender!",
+                    "Nenhum fato selecionado",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
                 return;
             }
 
-            DialogResult = true;
-            Close();
+            // Confirmação
+            var result = MessageBox.Show(
+                $"Deseja aprender {selectedCount} fato(s) selecionado(s)?",
+                "Confirmar Aprendizado",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                DialogResult = true;
+                this.Close();
+            }
         }
 
         private void Cancel_Click(object sender, RoutedEventArgs e)
         {
             DialogResult = false;
-            Close();
+            this.Close();
         }
 
         private void Close_Click(object sender, RoutedEventArgs e)
         {
             DialogResult = false;
-            Close();
+            this.Close();
         }
 
         private void UpdateLearnButton()
         {
             var selectedCount = Facts.Count(f => f.IsSelected);
-            LearnButton.Content = selectedCount > 0
-                ? $"🧠 Aprender {selectedCount} Selecionado{(selectedCount > 1 ? "s" : "")}"
-                : "🧠 Aprender Selecionados";
+
+            LearnButton.IsEnabled = selectedCount > 0;
+
+            if (selectedCount > 0)
+            {
+                LearnButton.Content = $"🧠 Aprender {selectedCount} Fato{(selectedCount > 1 ? "s" : "")} Selecionado{(selectedCount > 1 ? "s" : "")}";
+            }
+            else
+            {
+                LearnButton.Content = "🧠 Aprender Selecionados";
+            }
+        }
+
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            // Se está fechando sem ter definido DialogResult, significa que foi cancelado
+            if (!DialogResult)
+            {
+                DialogResult = false;
+            }
+            base.OnClosing(e);
         }
     }
 
