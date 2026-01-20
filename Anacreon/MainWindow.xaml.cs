@@ -1,15 +1,16 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Win32;
+using Newtonsoft.Json;
+using SmartAI.AI;
+using SmartAI.Data;
+using SmartAI.Services;
+using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
-using Microsoft.Win32;
-using Newtonsoft.Json;
-using SmartAI.AI;
-using SmartAI.Data;
-using SmartAI.Services;
 
 namespace SmartAI
 {
@@ -24,7 +25,10 @@ namespace SmartAI
         {
             InitializeComponent();
 
-            _context = new AIContext();
+            var optionsBuilder = new DbContextOptionsBuilder<AIContext>();
+            optionsBuilder.UseSqlite("Data Source=smartai.db");
+
+            _context = new AIContext(optionsBuilder.Options);
             _context.Database.EnsureCreated();
 
             _engine = new EnhancedIntelligenceEngine(_context);

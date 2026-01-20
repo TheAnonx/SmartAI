@@ -1,0 +1,370 @@
+﻿<Window x:Class="SmartAI.ValidationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Validação de Fatos Candidatos" 
+        Height="650" 
+        Width="900"
+        Background="#1E1E1E"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        MinHeight="500"
+        MinWidth="700">
+
+    <Window.Resources>
+        <Style x:Key="ModernButton" TargetType="Button">
+            <Setter Property="Background" Value="#007ACC"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="20,10"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1E88E5"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#555555"/>
+                    <Setter Property="Foreground" Value="#999999"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SecondaryButton" TargetType="Button">
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="15,10"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#3E3E42"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="WarningButton" TargetType="Button">
+            <Setter Property="Background" Value="#D32F2F"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#F44336"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="SuccessButton" TargetType="Button">
+            <Setter Property="Background" Value="#388E3C"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#4CAF50"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="EditButton" TargetType="Button">
+            <Setter Property="Background" Value="#FF9800"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="12,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FFA726"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="80"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="90"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#252526">
+            <Grid Margin="25,0">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="⚠️ VALIDAÇÃO EPISTÊMICA" 
+                               FontSize="22" 
+                               FontWeight="Bold" 
+                               Foreground="#4EC9B0"/>
+                    <TextBlock x:Name="SubtitleText" 
+                               Text="Fatos candidatos requerem aprovação humana" 
+                               FontSize="13" 
+                               Foreground="#CCCCCC"
+                               Margin="0,5,0,0"/>
+                </StackPanel>
+
+                <Button Content="✕" 
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Width="40" 
+                        Height="40"
+                        Background="Transparent"
+                        Foreground="#858585"
+                        BorderThickness="0"
+                        FontSize="20"
+                        FontWeight="Bold"
+                        Click="Close_Click"
+                        Cursor="Hand"/>
+            </Grid>
+        </Border>
+
+        <!-- Facts List -->
+        <Border Grid.Row="1" 
+                Background="#252526" 
+                Margin="20,15,20,10"
+                CornerRadius="6"
+                BorderBrush="#3F3F46"
+                BorderThickness="1">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                          Padding="15">
+                <ItemsControl x:Name="FactsList" ItemsSource="{Binding CandidateFacts}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#2D2D30"
+                                    CornerRadius="6"
+                                    Padding="15"
+                                    Margin="0,0,0,12"
+                                    BorderBrush="#3F3F46"
+                                    BorderThickness="1">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Fact Content -->
+                                    <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                                        <TextBlock FontSize="15" 
+                                                   FontWeight="SemiBold" 
+                                                   Foreground="#E0E0E0"
+                                                   TextWrapping="Wrap">
+                                            <Run Text="{Binding Subject, Mode=OneWay}" Foreground="#4EC9B0"/>
+                                            <Run Text=" " />
+                                            <Run Text="{Binding Relation, Mode=OneWay}" Foreground="#9CDCFE"/>
+                                            <Run Text=" " />
+                                            <Run Text="{Binding Object, Mode=OneWay}" Foreground="#CE9178"/>
+                                        </TextBlock>
+
+                                        <TextBlock FontSize="12" 
+                                                   Foreground="#888888"
+                                                   Margin="0,5,0,0">
+                                            <Run Text="Fonte:"/>
+                                            <Run Text="{Binding Sources[0].Type, Mode=OneWay}"/>
+                                            <Run Text=" | "/>
+                                            <Run Text="{Binding Sources[0].Identifier, Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+
+                                    <!-- Edit Panel (collapsed by default) - CORRIGIDO -->
+                                    <Border x:Name="EditPanelBorder" 
+                                            Grid.Row="1" 
+                                            Visibility="Collapsed"
+                                            Margin="0,0,0,10"
+                                            Background="#1E1E1E"
+                                            Padding="10"
+                                            CornerRadius="4">
+                                        <StackPanel x:Name="EditPanel">
+                                            <TextBlock Text="✏️ Editar Fato" 
+                                                       FontSize="13" 
+                                                       FontWeight="Bold"
+                                                       Foreground="#FF9800"
+                                                       Margin="0,0,0,10"/>
+
+                                            <TextBlock Text="Subject:" Foreground="#CCCCCC" FontSize="11"/>
+                                            <TextBox x:Name="EditSubject" 
+                                                     Text="{Binding Subject, Mode=TwoWay}"
+                                                     Background="#3C3C3C"
+                                                     Foreground="White"
+                                                     Padding="8"
+                                                     Margin="0,3,0,8"
+                                                     BorderBrush="#007ACC"
+                                                     BorderThickness="1"/>
+
+                                            <TextBlock Text="Relation:" Foreground="#CCCCCC" FontSize="11"/>
+                                            <TextBox x:Name="EditRelation" 
+                                                     Text="{Binding Relation, Mode=TwoWay}"
+                                                     Background="#3C3C3C"
+                                                     Foreground="White"
+                                                     Padding="8"
+                                                     Margin="0,3,0,8"
+                                                     BorderBrush="#007ACC"
+                                                     BorderThickness="1"/>
+
+                                            <TextBlock Text="Object:" Foreground="#CCCCCC" FontSize="11"/>
+                                            <TextBox x:Name="EditObject" 
+                                                     Text="{Binding Object, Mode=TwoWay}"
+                                                     Background="#3C3C3C"
+                                                     Foreground="White"
+                                                     Padding="8"
+                                                     Margin="0,3,0,8"
+                                                     BorderBrush="#007ACC"
+                                                     BorderThickness="1"/>
+
+                                            <TextBlock Text="Confiança (0.0 - 0.99):" Foreground="#CCCCCC" FontSize="11"/>
+                                            <TextBox x:Name="EditConfidence" 
+                                                     Text="0.90"
+                                                     Background="#3C3C3C"
+                                                     Foreground="White"
+                                                     Padding="8"
+                                                     Margin="0,3,0,0"
+                                                     BorderBrush="#007ACC"
+                                                     BorderThickness="1"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Action Buttons -->
+                                    <StackPanel Grid.Row="2" 
+                                                Orientation="Horizontal" 
+                                                HorizontalAlignment="Right">
+                                        <Button x:Name="BtnApprove"
+                                                Content="✓ Aprovar" 
+                                                Style="{StaticResource SuccessButton}"
+                                                Width="100"
+                                                Margin="0,0,8,0"
+                                                Tag="{Binding}"
+                                                Click="Approve_Click"/>
+
+                                        <Button x:Name="BtnEdit"
+                                                Content="✏️ Editar" 
+                                                Style="{StaticResource EditButton}"
+                                                Width="90"
+                                                Margin="0,0,8,0"
+                                                Tag="{Binding}"
+                                                Click="Edit_Click"/>
+
+                                        <Button x:Name="BtnReject"
+                                                Content="✗ Rejeitar" 
+                                                Style="{StaticResource WarningButton}"
+                                                Width="100"
+                                                Tag="{Binding}"
+                                                Click="Reject_Click"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Info Panel -->
+        <Border Grid.Row="2" 
+                Background="#1E1E1E"
+                Padding="25,10">
+            <StackPanel>
+                <TextBlock x:Name="InfoText" 
+                           FontSize="12" 
+                           Foreground="#CCCCCC"
+                           TextWrapping="Wrap">
+                    <Run Text="ℹ️ IMPORTANTE: " FontWeight="Bold" Foreground="#4EC9B0"/>
+                    <Run Text="Fatos candidatos NÃO são conhecimento validado. Somente após sua aprovação eles serão persistidos no sistema."/>
+                </TextBlock>
+
+                <TextBlock x:Name="StatsText"
+                           FontSize="12"
+                           Foreground="#888888"
+                           Margin="0,5,0,0"
+                           Text="Aprovados: 0 | Rejeitados: 0 | Editados: 0"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Action Buttons -->
+        <Border Grid.Row="3" Background="#1E1E1E" Padding="0,15">
+            <StackPanel Orientation="Horizontal" 
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <Button x:Name="CompleteButton"
+                        Content="✓ Concluir Validação" 
+                        Style="{StaticResource ModernButton}"
+                        Width="220"
+                        Height="50"
+                        Margin="0,0,15,0"
+                        Click="Complete_Click"/>
+                <Button Content="Cancelar" 
+                        Style="{StaticResource SecondaryButton}"
+                        Width="120"
+                        Height="50"
+                        Click="Cancel_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
