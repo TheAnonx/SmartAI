@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SmartAI.Data;
 
@@ -10,9 +11,11 @@ using SmartAI.Data;
 namespace Anacreon.Migrations
 {
     [DbContext(typeof(AIContext))]
-    partial class AIContextModelSnapshot : ModelSnapshot
+    [Migration("20260120102045_EpistemicRefactor")]
+    partial class EpistemicRefactor
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.2");

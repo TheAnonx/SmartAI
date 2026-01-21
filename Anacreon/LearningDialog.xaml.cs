@@ -6,6 +6,10 @@ using System.Windows;
 
 namespace SmartAI
 {
+    /// <summary>
+    /// Diálogo legado - mantido para compatibilidade
+    /// Use ValidationDialog para o novo sistema epistêmico
+    /// </summary>
     public partial class LearningDialog : Window, INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -29,7 +33,6 @@ namespace SmartAI
             }
         }
 
-        // Usar bool? para compatibilidade com ShowDialog()
         private bool _dialogResult = false;
         public new bool DialogResult
         {
@@ -40,18 +43,13 @@ namespace SmartAI
         public LearningDialog(List<string> facts)
         {
             InitializeComponent();
-
-            // Definir o DataContext para this para o binding funcionar
             DataContext = this;
 
             Facts = new ObservableCollection<FactItem>();
 
-            // Adicionar fatos sem numeração manual
             for (int i = 0; i < facts.Count; i++)
             {
                 var factText = facts[i].Trim();
-
-                // Remover numeração se já existir
                 var cleanedFact = System.Text.RegularExpressions.Regex.Replace(
                     factText, @"^[\d\•\-\*]+\.?\s*", "").Trim();
 
@@ -60,7 +58,7 @@ namespace SmartAI
                     Facts.Add(new FactItem
                     {
                         Text = cleanedFact,
-                        IsSelected = true // Todos selecionados por padrão
+                        IsSelected = true
                     });
                 }
             }
@@ -115,7 +113,6 @@ namespace SmartAI
                 return;
             }
 
-            // Confirmação
             var result = MessageBox.Show(
                 $"Deseja aprender {selectedCount} fato(s) selecionado(s)?",
                 "Confirmar Aprendizado",
@@ -159,7 +156,6 @@ namespace SmartAI
 
         protected override void OnClosing(CancelEventArgs e)
         {
-            // Se está fechando sem ter definido DialogResult, significa que foi cancelado
             if (!DialogResult)
             {
                 DialogResult = false;

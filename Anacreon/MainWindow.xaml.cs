@@ -1,15 +1,18 @@
-﻿using System;
-using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Input;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Win32;
 using Newtonsoft.Json;
 using SmartAI.AI;
 using SmartAI.Data;
 using SmartAI.Services;
+using System;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 
 namespace SmartAI
 {
@@ -24,16 +27,16 @@ namespace SmartAI
         {
             InitializeComponent();
 
-            _context = new AIContext();
+            var optionsBuilder = new DbContextOptionsBuilder<AIContext>();
+            optionsBuilder.UseSqlite("Data Source=smartai.db");
+
+            _context = new AIContext(optionsBuilder.Options);
             _context.Database.EnsureCreated();
 
             _engine = new EnhancedIntelligenceEngine(_context);
 
             _messages = new ObservableCollection<ChatMessage>();
             _recentLearning = new ObservableCollection<string>();
-
-            ChatMessages.ItemsSource = _messages;
-            RecentLearning.ItemsSource = _recentLearning;
 
             Loaded += MainWindow_Loaded;
         }
@@ -49,9 +52,9 @@ namespace SmartAI
             await ProcessUserInput();
         }
 
-        private async void InputBox_KeyDown(object sender, KeyEventArgs e)
+        private async void InputTextBox_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Enter && !string.IsNullOrWhiteSpace(InputBox.Text))
+            if (e.Key == Key.Enter && !string.IsNullOrWhiteSpace(InputTextBox.Text))
             {
                 await ProcessUserInput();
             }
@@ -59,11 +62,11 @@ namespace SmartAI
 
         private async Task ProcessUserInput()
         {
-            var input = InputBox.Text.Trim();
+            var input = InputTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(input)) return;
 
             AddUserMessage(input);
-            InputBox.Clear();
+            InputTextBox.Clear();
 
             StatusText.Text = "Processando...";
             SendButton.IsEnabled = false;
@@ -82,11 +85,11 @@ namespace SmartAI
             {
                 StatusText.Text = "Sistema pronto. Ensine-me ou faça perguntas!";
                 SendButton.IsEnabled = true;
-                InputBox.Focus();
+                InputTextBox.Focus();
             }
         }
 
-        private async void SearchWeb_Click(object sender, RoutedEventArgs e)
+        private async void WebSearch_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new SearchDialog
             {
@@ -275,66 +278,305 @@ namespace SmartAI
 
             if (result == MessageBoxResult.Yes)
             {
-                _messages.Clear();
+                ChatPanel.Children.Clear();
                 AddSystemMessage("Chat limpo. Conhecimento preservado.");
+            }
+        }
+
+        private async void RunTests_Click(object sender, RoutedEventArgs e)
+        {
+            // Criar janela para mostrar os resultados dos testes
+            var testWindow = new Window
+            {
+                Title = "Testes do Sistema Epistêmico",
+                Width = 900,
+                Height = 700,
+                Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this
+            };
+
+            var scrollViewer = new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Padding = new Thickness(10)
+            };
+
+            var textBox = new TextBox
+            {
+                IsReadOnly = true,
+                TextWrapping = TextWrapping.Wrap,
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 12,
+                Foreground = Brushes.White,
+                Background = new SolidColorBrush(Color.FromRgb(30, 30, 30)),
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(10)
+            };
+
+            scrollViewer.Content = textBox;
+            testWindow.Content = scrollViewer;
+
+            // Mostrar janela
+            testWindow.Show();
+
+            // Redirecionar Console.WriteLine para a TextBox
+            var originalOut = Console.Out;
+            var writer = new StringWriter();
+            Console.SetOut(writer);
+
+            try
+            {
+                // Executar os testes
+                textBox.Text = "Iniciando testes...\n\n";
+                await Task.Run(async () => await SmartAI.Tests.EpistemicSystemTests.RunAllTests());
+
+                // Mostrar resultados
+                textBox.Text = writer.ToString();
+
+                // Auto-scroll para o final
+                scrollViewer.ScrollToEnd();
+            }
+            catch (Exception ex)
+            {
+                textBox.Text += $"\n\n❌ ERRO AO EXECUTAR TESTES:\n{ex.Message}\n\n{ex.StackTrace}";
+            }
+            finally
+            {
+                // Restaurar Console original
+                Console.SetOut(originalOut);
+            }
+        }
+
+        // Métodos para os novos eventos do XAML (implementação básica)
+        private void ShowStats_Click(object sender, RoutedEventArgs e)
+        {
+            AddSystemMessage("📊 Exibindo estatísticas do sistema...");
+            // Implementação futura: mostrar janela detalhada de estatísticas
+        }
+
+        private void CheckConflicts_Click(object sender, RoutedEventArgs e)
+        {
+            AddSystemMessage("⚠️ Verificando conflitos no conhecimento...");
+            // Implementação futura: verificação de conflitos
+        }
+
+        private void ShowValidatedFacts_Click(object sender, RoutedEventArgs e)
+        {
+            AddSystemMessage("📚 Exibindo fatos validados...");
+            // Implementação futura: mostrar lista de fatos validados
+        }
+
+        private void ShowCandidateFacts_Click(object sender, RoutedEventArgs e)
+        {
+            AddSystemMessage("⏳ Exibindo fatos candidatos...");
+            // Implementação futura: mostrar lista de candidatos
+        }
+
+        private void ShowLearningHistory_Click(object sender, RoutedEventArgs e)
+        {
+            AddSystemMessage("🗂️ Exibindo histórico de aprendizado...");
+            // Implementação futura: mostrar histórico
+        }
+
+        private void About_Click(object sender, RoutedEventArgs e)
+        {
+            AddSystemMessage("ℹ️ Sistema Epistêmico SmartAI v1.0\n" +
+                            "Sistema cognitivo com validação epistêmica e aprendizado contínuo.");
+        }
+
+        private void ShowCommands_Click(object sender, RoutedEventArgs e)
+        {
+            AddSystemMessage("📖 Comandos disponíveis:\n" +
+                            "• aprender: [fato] - Ensina um novo fato\n" +
+                            "• pesquisar: [termo] - Busca na web\n" +
+                            "• estatísticas - Mostra estatísticas\n" +
+                            "• verificar conflitos - Verifica inconsistências\n" +
+                            "• limpar - Limpa o chat");
+        }
+
+        private void Exit_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "Deseja realmente sair do sistema?",
+                "Confirmar Saída",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                Application.Current.Shutdown();
             }
         }
 
         private void AddUserMessage(string message)
         {
-            _messages.Add(new ChatMessage
+            var border = new Border
             {
-                Message = message,
-                Sender = "Você",
-                IsUser = true,
-                Timestamp = DateTime.Now.ToString("HH:mm:ss")
+                Background = new SolidColorBrush(Color.FromArgb(50, 0, 122, 204)),
+                CornerRadius = new CornerRadius(12, 12, 12, 4),
+                Margin = new Thickness(0, 5, 60, 5),
+                Padding = new Thickness(12),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            var stackPanel = new StackPanel();
+
+            var headerStack = new StackPanel { Orientation = Orientation.Horizontal };
+            headerStack.Children.Add(new TextBlock
+            {
+                Text = "Você",
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.LightBlue,
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 10, 2)
             });
+            headerStack.Children.Add(new TextBlock
+            {
+                Text = DateTime.Now.ToString("HH:mm:ss"),
+                Foreground = Brushes.Gray,
+                FontSize = 10
+            });
+
+            stackPanel.Children.Add(headerStack);
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = message,
+                Foreground = Brushes.White,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 14
+            });
+
+            border.Child = stackPanel;
+            ChatPanel.Children.Add(border);
             ScrollToBottom();
         }
 
         private void AddAssistantMessage(string message)
         {
-            _messages.Add(new ChatMessage
+            var border = new Border
             {
-                Message = message,
-                Sender = "Smart AI",
-                IsUser = false,
-                Timestamp = DateTime.Now.ToString("HH:mm:ss")
+                Background = new SolidColorBrush(Color.FromArgb(50, 78, 201, 176)),
+                CornerRadius = new CornerRadius(12, 12, 4, 12),
+                Margin = new Thickness(60, 5, 0, 5),
+                Padding = new Thickness(12)
+            };
+
+            var stackPanel = new StackPanel();
+
+            var headerStack = new StackPanel { Orientation = Orientation.Horizontal };
+            headerStack.Children.Add(new TextBlock
+            {
+                Text = "Smart AI",
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(78, 201, 176)),
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 10, 2)
             });
+            headerStack.Children.Add(new TextBlock
+            {
+                Text = DateTime.Now.ToString("HH:mm:ss"),
+                Foreground = Brushes.Gray,
+                FontSize = 10
+            });
+
+            stackPanel.Children.Add(headerStack);
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = message,
+                Foreground = Brushes.White,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 14
+            });
+
+            border.Child = stackPanel;
+            ChatPanel.Children.Add(border);
             ScrollToBottom();
         }
 
         private void AddSystemMessage(string message)
         {
-            _messages.Add(new ChatMessage
+            var border = new Border
             {
-                Message = message,
-                Sender = "Sistema",
-                IsUser = false,
-                Timestamp = DateTime.Now.ToString("HH:mm:ss")
+                Background = new SolidColorBrush(Color.FromArgb(30, 255, 255, 255)),
+                CornerRadius = new CornerRadius(8),
+                Margin = new Thickness(40, 5, 40, 5),
+                Padding = new Thickness(10),
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+
+            var stackPanel = new StackPanel { Orientation = Orientation.Horizontal };
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = "⚡ ",
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.Yellow,
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center
             });
+            stackPanel.Children.Add(new TextBlock
+            {
+                Text = message,
+                Foreground = Brushes.LightGray,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                FontStyle = FontStyles.Italic
+            });
+
+            border.Child = stackPanel;
+            ChatPanel.Children.Add(border);
             ScrollToBottom();
         }
 
         private void ScrollToBottom()
         {
-            ChatScroll.ScrollToEnd();
+            ChatScrollViewer.ScrollToEnd();
         }
 
         private async Task UpdateStatistics()
         {
             var stats = await _engine.GetStatistics();
 
-            ConceptCount.Text = stats["Concepts"].ToString();
-            InstanceCount.Text = stats["Instances"].ToString();
-            RelationCount.Text = (stats["ConceptProperties"] + stats["InstanceProperties"]).ToString();
-            ConversationCount.Text = stats["Conversations"].ToString();
+            // Atualizar estatísticas na barra de status
+            ModeIndicator.Text = "Modo: ANSWER";
+            FactCount.Text = $"Fatos: {stats["Concepts"]}";
 
-            _recentLearning.Clear();
+            // Atualizar estatísticas no painel lateral
+            CurrentModeText.Text = "ANSWER";
+            ValidatedFactsCountText.Text = stats["Concepts"].ToString();
+            CandidatesCountText.Text = stats["Instances"].ToString();
+
+            var conflicts = 0; // Implementar contagem de conflitos futuramente
+            ConflictIndicator.Text = $"Conflitos: {conflicts}";
+            ConflictsCountText.Text = conflicts.ToString();
+
+            // Atualizar aprendizado recente
+            RecentLearningPanel.Children.Clear();
             var recent = await _engine.GetRecentLearning(5);
-            foreach (var item in recent)
+
+            if (recent.Any())
             {
-                _recentLearning.Add(item);
+                foreach (var item in recent)
+                {
+                    var textBlock = new TextBlock
+                    {
+                        Text = $"• {item}",
+                        Foreground = Brushes.LightGray,
+                        FontSize = 12,
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(0, 2, 0, 2)
+                    };
+                    RecentLearningPanel.Children.Add(textBlock);
+                }
+            }
+            else
+            {
+                RecentLearningPanel.Children.Add(new TextBlock
+                {
+                    Text = "Nenhum aprendizado recente",
+                    Foreground = Brushes.Gray,
+                    FontSize = 12
+                });
             }
         }
     }
