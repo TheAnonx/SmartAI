@@ -1,4 +1,5 @@
-﻿using System;
+﻿// Arquivo completo - substituir todo o conteúdo
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -117,7 +118,7 @@ namespace SmartAI
                 var item = FindVisualParent<Border>(button);
                 if (item != null)
                 {
-                    // Encontrar o painel de edição (agora é Border)
+                    // Encontrar o painel de edição
                     var editPanelBorder = FindVisualChild<Border>(item, "EditPanelBorder");
                     if (editPanelBorder != null)
                     {
@@ -129,50 +130,49 @@ namespace SmartAI
                         }
                         else
                         {
-                            // Encontrar o StackPanel dentro do Border
-                            var editPanel = FindVisualChild<StackPanel>(editPanelBorder, "EditPanel");
+                            // Encontrar os elementos de edição
+                            var subjectBox = FindVisualChild<TextBox>(editPanelBorder, "EditSubject");
+                            var relationBox = FindVisualChild<TextBox>(editPanelBorder, "EditRelation");
+                            var objectBox = FindVisualChild<TextBox>(editPanelBorder, "EditObject");
+                            var confidenceBox = FindVisualChild<TextBox>(editPanelBorder, "EditConfidence");
 
-                            if (editPanel != null)
+                            if (subjectBox != null && relationBox != null && objectBox != null && confidenceBox != null)
                             {
-                                // Salvar edição
-                                var subjectBox = FindVisualChild<TextBox>(editPanel, "EditSubject");
-                                var relationBox = FindVisualChild<TextBox>(editPanel, "EditRelation");
-                                var objectBox = FindVisualChild<TextBox>(editPanel, "EditObject");
-                                var confidenceBox = FindVisualChild<TextBox>(editPanel, "EditConfidence");
-
-                                if (subjectBox != null && relationBox != null && objectBox != null)
+                                // Validar confiança
+                                if (!double.TryParse(confidenceBox.Text, out double confidence)
+                                    || confidence < 0 || confidence >= 1.0)
                                 {
-                                    // Validar confiança
-                                    if (!double.TryParse(confidenceBox?.Text, out double confidence)
-                                        || confidence < 0 || confidence >= 1.0)
-                                    {
-                                        MessageBox.Show(
-                                            "Confiança deve ser entre 0.0 e 0.99",
-                                            "Valor Inválido",
-                                            MessageBoxButton.OK,
-                                            MessageBoxImage.Warning);
-                                        return;
-                                    }
-
-                                    var decision = new FactDecision
-                                    {
-                                        Fact = viewModel.Fact,
-                                        Action = ValidationAction.EDIT,
-                                        EditedSubject = subjectBox.Text,
-                                        EditedRelation = relationBox.Text,
-                                        EditedObject = objectBox.Text,
-                                        Confidence = confidence
-                                    };
-
-                                    Decisions.Add(decision);
-                                    _editedCount++;
-
-                                    CandidateFacts.Remove(viewModel);
-                                    UpdateStats();
-                                    UpdateSubtitle();
-
-                                    ShowTemporaryMessage("✏️ Fato editado e aprovado", "#FF9800");
+                                    MessageBox.Show(
+                                        "Confiança deve ser entre 0.0 e 0.99",
+                                        "Valor Inválido",
+                                        MessageBoxButton.OK,
+                                        MessageBoxImage.Warning);
+                                    return;
                                 }
+
+                                // Criar decisão de edição
+                                var decision = new FactDecision
+                                {
+                                    Fact = viewModel.Fact,
+                                    Action = ValidationAction.EDIT,
+                                    EditedSubject = subjectBox.Text,
+                                    EditedRelation = relationBox.Text,
+                                    EditedObject = objectBox.Text,
+                                    Confidence = confidence
+                                };
+
+                                Decisions.Add(decision);
+                                _editedCount++;
+
+                                CandidateFacts.Remove(viewModel);
+                                UpdateStats();
+                                UpdateSubtitle();
+
+                                ShowTemporaryMessage("✏️ Fato editado e aprovado", "#FF9800");
+
+                                // Esconder o painel de edição
+                                editPanelBorder.Visibility = Visibility.Collapsed;
+                                button.Content = "✏️ Editar";
                             }
                         }
                     }

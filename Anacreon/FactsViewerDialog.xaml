@@ -1,0 +1,256 @@
+﻿<Window x:Class="SmartAI.FactsViewerDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Visualizador de Fatos" 
+        Height="700" 
+        Width="1100"
+        Background="#1E1E1E"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        MinHeight="600"
+        MinWidth="900">
+
+    <Window.Resources>
+        <Style x:Key="ModernButton" TargetType="Button">
+            <Setter Property="Background" Value="#007ACC"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="15,8"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1E88E5"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="InfoButton" TargetType="Button">
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#3E3E42"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="80"/>
+            <RowDefinition Height="60"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="70"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#252526">
+            <Grid Margin="25,0">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="📚 VISUALIZADOR DE FATOS" 
+                               FontSize="22" 
+                               FontWeight="Bold" 
+                               Foreground="#4EC9B0"/>
+                    <TextBlock x:Name="SubtitleText" 
+                               Text="0 fato(s) encontrado(s)" 
+                               FontSize="13" 
+                               Foreground="#CCCCCC"
+                               Margin="0,5,0,0"/>
+                </StackPanel>
+
+                <Button Content="✕" 
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Width="40" 
+                        Height="40"
+                        Background="Transparent"
+                        Foreground="#858585"
+                        BorderThickness="0"
+                        FontSize="20"
+                        FontWeight="Bold"
+                        Click="Close_Click"
+                        Cursor="Hand"/>
+            </Grid>
+        </Border>
+
+        <!-- Filter -->
+        <Border Grid.Row="1" 
+                Background="#252526"
+                Padding="25,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Text="🔍 Filtrar:"
+                           FontSize="14"
+                           Foreground="#CCCCCC"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0"/>
+
+                <TextBox Grid.Column="1"
+                         Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                         Background="#3C3C3C"
+                         Foreground="White"
+                         BorderBrush="#007ACC"
+                         BorderThickness="2"
+                         Padding="10"
+                         FontSize="14"
+                         VerticalContentAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <!-- Facts List -->
+        <Border Grid.Row="2" 
+                Background="#252526" 
+                Margin="20,10,20,10"
+                CornerRadius="6"
+                BorderBrush="#3F3F46"
+                BorderThickness="1">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" 
+                          Padding="15">
+                <ItemsControl x:Name="FactsList" ItemsSource="{Binding Facts}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#2D2D30"
+                                    CornerRadius="6"
+                                    Padding="15"
+                                    Margin="0,0,0,10"
+                                    BorderBrush="#3F3F46"
+                                    BorderThickness="1">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Fact Content -->
+                                    <TextBlock Grid.Row="0" 
+                                               FontSize="15" 
+                                               TextWrapping="Wrap"
+                                               Margin="0,0,0,10">
+                                        <Run Text="{Binding Subject, Mode=OneWay}" 
+                                             Foreground="#4EC9B0" 
+                                             FontWeight="SemiBold"/>
+                                        <Run Text=" " />
+                                        <Run Text="{Binding Relation, Mode=OneWay}" 
+                                             Foreground="#9CDCFE"/>
+                                        <Run Text=" " />
+                                        <Run Text="{Binding Object, Mode=OneWay}" 
+                                             Foreground="#CE9178" 
+                                             FontWeight="SemiBold"/>
+                                    </TextBlock>
+
+                                    <!-- Metadata -->
+                                    <Grid Grid.Row="1" Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="Confiança" 
+                                                       FontSize="10" 
+                                                       Foreground="#888888"/>
+                                            <TextBlock Text="{Binding ConfidencePercent, Mode=OneWay}" 
+                                                       FontSize="13" 
+                                                       Foreground="#4CAF50"
+                                                       FontWeight="Bold"/>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1">
+                                            <TextBlock Text="Fonte" 
+                                                       FontSize="10" 
+                                                       Foreground="#888888"/>
+                                            <TextBlock Text="{Binding Source, Mode=OneWay}" 
+                                                       FontSize="13" 
+                                                       Foreground="#CCCCCC"/>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Validado em" 
+                                                       FontSize="10" 
+                                                       Foreground="#888888"/>
+                                            <TextBlock Text="{Binding ValidatedAt, Mode=OneWay}" 
+                                                       FontSize="13" 
+                                                       Foreground="#CCCCCC"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Actions -->
+                                    <StackPanel Grid.Row="2" 
+                                                Orientation="Horizontal" 
+                                                HorizontalAlignment="Right">
+                                        <TextBlock FontSize="11" 
+                                                   Foreground="#888888"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,10,0">
+                                            <Run Text="Status: "/>
+                                            <Run Text="{Binding Status, Mode=OneWay}" FontWeight="Bold"/>
+                                            <Run Text=" | Aprovado por: "/>
+                                            <Run Text="{Binding ApprovedBy, Mode=OneWay}"/>
+                                        </TextBlock>
+
+                                        <Button Content="ℹ️ Detalhes"
+                                                Style="{StaticResource InfoButton}"
+                                                Width="90"
+                                                Tag="{Binding}"
+                                                Click="ShowDetails_Click"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
+        <!-- Action Buttons -->
+        <Border Grid.Row="3" Background="#1E1E1E">
+            <StackPanel Orientation="Horizontal" 
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
+                <Button Content="Fechar" 
+                        Style="{StaticResource ModernButton}"
+                        Width="150"
+                        Height="45"
+                        Click="Close_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

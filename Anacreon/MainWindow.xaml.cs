@@ -1,8 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿// Arquivo completo - substituir todo o conteúdo
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Win32;
 using Newtonsoft.Json;
-using SmartAI.AI;
+using SmartAI.Cognitive;
 using SmartAI.Data;
+using SmartAI.Models;
 using SmartAI.Services;
 using System;
 using System.Collections.ObjectModel;
@@ -19,7 +21,11 @@ namespace SmartAI
     public partial class MainWindow : Window
     {
         private readonly AIContext _context;
-        private readonly EnhancedIntelligenceEngine _engine;
+        private readonly CognitiveEngine _cognitiveEngine;
+        private readonly ValidationService _validationService;
+        private readonly ConflictDetectionService _conflictService;
+        private readonly FactService _factService;
+
         private ObservableCollection<ChatMessage> _messages;
         private ObservableCollection<string> _recentLearning;
 
@@ -33,7 +39,11 @@ namespace SmartAI
             _context = new AIContext(optionsBuilder.Options);
             _context.Database.EnsureCreated();
 
-            _engine = new EnhancedIntelligenceEngine(_context);
+            // USAR SISTEMA EPISTÊMICO
+            _cognitiveEngine = new CognitiveEngine(_context);
+            _validationService = new ValidationService(_context);
+            _conflictService = new ConflictDetectionService(_context);
+            _factService = new FactService(_context);
 
             _messages = new ObservableCollection<ChatMessage>();
             _recentLearning = new ObservableCollection<string>();
@@ -44,7 +54,13 @@ namespace SmartAI
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             await UpdateStatistics();
-            AddSystemMessage("Sistema inicializado! Estou pronto para aprender e responder perguntas. 🚀");
+            AddSystemMessage("🚀 Sistema Epistêmico Inicializado!\n\n" +
+                           "Características:\n" +
+                           "• Validação humana obrigatória\n" +
+                           "• Rastreamento completo de proveniência\n" +
+                           "• Detecção automática de conflitos\n" +
+                           "• Confiança sempre < 100%\n\n" +
+                           "Digite sua pergunta ou ensine-me algo!");
         }
 
         private async void SendButton_Click(object sender, RoutedEventArgs e)
@@ -73,8 +89,46 @@ namespace SmartAI
 
             try
             {
-                var response = await _engine.ProcessInput(input);
-                AddAssistantMessage(response);
+                // USAR COGNITIVE ENGINE
+                var response = await _cognitiveEngine.Process(input);
+
+                // Atualizar indicador de modo
+                ModeIndicator.Text = $"Modo: {response.Mode}";
+                CurrentModeText.Text = response.Mode.ToString();
+
+                // Se requer validação E tem candidatos, apresentar dialog
+                if (response.RequiresAction && 
+                    response.CandidateFacts != null && 
+                    response.CandidateFacts.Any())
+                {
+                    AddAssistantMessage(response.Text);
+                    await PresentValidationDialog(response);
+                }
+                // Se sugeriu investigação como opção
+                else if (response.RequiresAction && 
+                         response.SuggestedMode == CognitiveMode.INVESTIGATION)
+                {
+                    // Oferecer investigação
+                    AddAssistantMessage(response.Text);
+
+                    var result = MessageBox.Show(
+                        "Deseja que eu investigue na web?",
+                        "Investigação Web",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Question);
+
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        // Extrair o subject da resposta ou usar o input original
+                        var subject = response.Facts?.FirstOrDefault()?.Subject ?? input;
+                        await InvestigateWeb(subject);
+                    }
+                }
+                else
+                {
+                    AddAssistantMessage(response.Text);
+                }
+
                 await UpdateStatistics();
             }
             catch (Exception ex)
@@ -83,10 +137,202 @@ namespace SmartAI
             }
             finally
             {
-                StatusText.Text = "Sistema pronto. Ensine-me ou faça perguntas!";
+                StatusText.Text = "Sistema pronto";
                 SendButton.IsEnabled = true;
                 InputTextBox.Focus();
             }
+        }
+
+        private async Task PresentValidationDialog(CognitiveResponse response)
+        {
+            StatusText.Text = "Aguardando validação...";
+
+            // Criar sessão de validação
+            var session = await _validationService.StartValidationSession(
+                response.InvestigationResult?.Query ?? "direct input",
+                response.CandidateFacts ?? new System.Collections.Generic.List<Fact>()
+            );
+
+            // Mostrar dialog
+            var dialog = new ValidationDialog(response.CandidateFacts ?? new System.Collections.Generic.List<Fact>())
+            {
+                Owner = this
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                StatusText.Text = "Processando validação...";
+
+                // Processar decisões do usuário
+                var result = await _validationService.ProcessUserDecisions(
+                    session.Id,
+                    dialog.Decisions,
+                    "user"
+                );
+
+                AddSystemMessage(result.GetSummary());
+                await UpdateStatistics();
+
+                // Verificar conflitos após aprendizado
+                await CheckAndPresentConflicts();
+            }
+            else
+            {
+                AddSystemMessage("Validação cancelada. Nenhum fato foi persistido.");
+            }
+
+            StatusText.Text = "Sistema pronto";
+        }
+
+        private async Task InvestigateWeb(string query)
+        {
+            StatusText.Text = "Investigando na web...";
+
+            try
+            {
+                // Chamar diretamente o serviço de investigação
+                var investigationService = new InvestigationService(_context);
+                var investigationResult = await investigationService.Investigate(query);
+
+                if (investigationResult.Success && investigationResult.CandidateFacts.Any())
+                {
+                    // Formatar resposta da investigação
+                    var responseText = $"🔍 **Investigação Concluída**\n\n";
+                    responseText += $"Encontrei {investigationResult.CandidateFacts.Count} possíveis fatos sobre '{query}':\n\n";
+
+                    for (int i = 0; i < investigationResult.CandidateFacts.Count; i++)
+                    {
+                        var fact = investigationResult.CandidateFacts[i];
+                        responseText += $"{i + 1}. {fact.Subject} {fact.Relation} {fact.Object}\n";
+                    }
+
+                    responseText += $"\n📚 Fonte: {investigationResult.SourceName}\n";
+                    responseText += $"🔗 {investigationResult.SourceUrl}\n\n";
+                    responseText += $"⚠️ **IMPORTANTE**: Estes são CANDIDATOS, não fatos validados.\n";
+                    responseText += $"Você pode validá-los usando o menu 'Conhecimento' → 'Fatos Candidatos'.";
+
+                    AddAssistantMessage(responseText);
+
+                    // Salvar os fatos candidatos no banco de dados para validação futura
+                    var savedFactsCount = 0;
+                    foreach (var candidate in investigationResult.CandidateFacts)
+                    {
+                        try
+                        {
+                            // Validar dados antes de salvar
+                            var subject = string.IsNullOrWhiteSpace(candidate.Subject) ? "Desconhecido" : candidate.Subject.Trim();
+                            var relation = string.IsNullOrWhiteSpace(candidate.Relation) ? "tem" : candidate.Relation.Trim();
+                            var obj = string.IsNullOrWhiteSpace(candidate.Object) ? "informação desconhecida" : candidate.Object.Trim();
+
+                            // Criar fato candidato real no banco de dados
+                            var fact = new Fact
+                            {
+                                Subject = subject,
+                                Relation = relation,
+                                Object = obj,
+                                Confidence = 0.0,
+                                Status = FactStatus.CANDIDATE,
+                                CreatedAt = DateTime.Now,
+                                Version = 1
+                            };
+
+                            _context.Facts.Add(fact);
+                            await _context.SaveChangesAsync(); // Salvar para obter o ID
+
+                            // Adicionar fonte
+                            var source = new FactSource
+                            {
+                                FactId = fact.Id,
+                                Type = SmartAI.Models.SourceType.WEB, // Especificar namespace completo
+                                Identifier = investigationResult.SourceName ?? "Web Search",
+                                URL = investigationResult.SourceUrl,
+                                TrustWeight = 0.5,
+                                CollectedAt = DateTime.Now
+                            };
+                            _context.FactSources.Add(source);
+
+                            // Adicionar histórico
+                            var history = new FactHistory
+                            {
+                                FactId = fact.Id,
+                                Version = 1,
+                                NewSubject = subject,
+                                NewRelation = relation,
+                                NewObject = obj,
+                                NewConfidence = 0.0,
+                                NewStatus = FactStatus.CANDIDATE,
+                                ChangedBy = "system",
+                                ChangedAt = DateTime.Now,
+                                Reason = "Candidate fact from web search",
+                                ChangeType = ChangeType.CREATED
+                            };
+                            _context.FactHistory.Add(history);
+
+                            await _context.SaveChangesAsync();
+                            savedFactsCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Erro ao salvar fato candidato: {ex.Message}");
+                            AddSystemMessage($"⚠️ Erro ao salvar fato: {ex.Message}");
+                        }
+                    }
+
+                    AddSystemMessage($"💾 {savedFactsCount} fatos candidatos salvos para validação futura.");
+                }
+                else
+                {
+                    var responseText = $"🔍 Pesquisei sobre '{query}', mas não encontrei fatos estruturados.\n\n";
+                    responseText += $"Resumo da busca:\n{investigationResult.RawText}\n\n";
+                    responseText += $"Fonte: {investigationResult.SourceName}";
+
+                    AddAssistantMessage(responseText);
+                }
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"❌ Erro na investigação: {ex.Message}");
+                Console.WriteLine($"Detalhes do erro: {ex.InnerException?.Message}");
+            }
+            finally
+            {
+                StatusText.Text = "Sistema pronto";
+            }
+        }
+
+
+        private async Task CheckAndPresentConflicts()
+        {
+            var conflicts = await _conflictService.DetectConflicts();
+
+            if (conflicts.Any())
+            {
+                ConflictIndicator.Text = $"Conflitos: {conflicts.Count}";
+                ConflictsCountText.Text = conflicts.Count.ToString();
+
+                var result = MessageBox.Show(
+                    $"⚠️ Detectei {conflicts.Count} conflito(s) no conhecimento!\n\n" +
+                    $"Deseja revisar agora?",
+                    "Conflitos Detectados",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    await ShowConflictResolutionDialog(conflicts);
+                }
+            }
+        }
+
+        private async Task ShowConflictResolutionDialog(System.Collections.Generic.List<FactConflict> conflicts)
+        {
+            var dialog = new ConflictResolutionDialog(conflicts)
+            {
+                Owner = this
+            };
+
+            dialog.ShowDialog();
+            await UpdateStatistics();
         }
 
         private async void WebSearch_Click(object sender, RoutedEventArgs e)
@@ -102,190 +348,182 @@ namespace SmartAI
                 if (string.IsNullOrWhiteSpace(query)) return;
 
                 AddUserMessage($"🌐 Buscar: {query}");
-
-                StatusText.Text = "Buscando na web...";
-                SendButton.IsEnabled = false;
-
-                try
-                {
-                    var searchService = new WebSearchService();
-                    var result = await searchService.SmartSearch(query);
-
-                    if (result.Success && !string.IsNullOrEmpty(result.Summary))
-                    {
-                        AddAssistantMessage(result.ToString());
-                        await Task.Delay(300);
-                        ScrollToBottom();
-
-                        var facts = searchService.ExtractFacts(result.Summary);
-
-                        if (facts.Any())
-                        {
-                            AddSystemMessage($"💡 Encontrei {facts.Count} fatos que posso aprender!");
-                            await Task.Delay(300);
-                            ScrollToBottom();
-
-                            var learnDialog = new LearningDialog(facts)
-                            {
-                                Owner = this
-                            };
-
-                            if (learnDialog.ShowDialog() == true && learnDialog.SelectedFacts.Any())
-                            {
-                                var selectedFacts = learnDialog.SelectedFacts;
-                                int learned = 0;
-
-                                AddSystemMessage($"🧠 Processando {selectedFacts.Count} fatos selecionados...");
-
-                                foreach (var fact in selectedFacts)
-                                {
-                                    try
-                                    {
-                                        var cleanFact = System.Text.RegularExpressions.Regex.Replace(
-                                            fact, @"^\d+\.\s*", "");
-
-                                        var response = await _engine.ProcessInput(cleanFact);
-                                        if (response.Contains("✅"))
-                                        {
-                                            learned++;
-                                        }
-                                    }
-                                    catch { }
-                                }
-
-                                AddSystemMessage($"✅ Aprendi {learned} de {selectedFacts.Count} conceitos da busca web!");
-                                await UpdateStatistics();
-                            }
-                            else
-                            {
-                                AddSystemMessage("Ok, não vou aprender esses fatos. Você pode me ensinar manualmente quando quiser!");
-                            }
-                        }
-                        else
-                        {
-                            AddSystemMessage("ℹ️ Não consegui extrair fatos estruturados desse resultado, mas você pode me ensinar manualmente!");
-                        }
-                    }
-                    else
-                    {
-                        AddAssistantMessage($"❌ Não encontrei resultados para '{query}'.\n\n" +
-                            $"Erro: {result.Error ?? "Sem informações disponíveis"}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    AddSystemMessage($"❌ Erro na busca: {ex.Message}");
-                }
-                finally
-                {
-                    StatusText.Text = "Sistema pronto.";
-                    SendButton.IsEnabled = true;
-                }
+                await InvestigateWeb(query);
             }
         }
 
-        private async void ImportFile_Click(object sender, RoutedEventArgs e)
+        private async void ShowValidatedFacts_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new OpenFileDialog
+            StatusText.Text = "Carregando fatos validados...";
+
+            try
             {
-                Filter = "Arquivos de Texto|*.txt|Todos os Arquivos|*.*",
-                Title = "Importar Conhecimento"
+                var facts = await _context.Facts
+                    .Where(f => f.Status == FactStatus.VALIDATED)
+                    .Include(f => f.Sources)
+                    .Include(f => f.History)
+                    .OrderByDescending(f => f.ValidatedAt)
+                    .ToListAsync();
+
+                var viewer = new FactsViewerDialog(facts, "Fatos Validados")
+                {
+                    Owner = this
+                };
+
+                viewer.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"❌ Erro ao carregar fatos: {ex.Message}");
+            }
+            finally
+            {
+                StatusText.Text = "Sistema pronto";
+            }
+        }
+
+        private async void ShowCandidateFacts_Click(object sender, RoutedEventArgs e)
+        {
+            StatusText.Text = "Carregando fatos candidatos...";
+
+            try
+            {
+                var candidates = await _factService.GetCandidateFacts();
+
+                if (!candidates.Any())
+                {
+                    MessageBox.Show(
+                        "Não há fatos candidatos aguardando validação.",
+                        "Nenhum Candidato",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    return;
+                }
+
+                var viewer = new FactsViewerDialog(candidates, "Fatos Candidatos (Não Validados)")
+                {
+                    Owner = this
+                };
+
+                viewer.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"❌ Erro ao carregar candidatos: {ex.Message}");
+            }
+            finally
+            {
+                StatusText.Text = "Sistema pronto";
+            }
+        }
+
+        private async void CheckConflicts_Click(object sender, RoutedEventArgs e)
+        {
+            StatusText.Text = "Detectando conflitos...";
+
+            try
+            {
+                var conflicts = await _conflictService.DetectConflicts();
+
+                if (!conflicts.Any())
+                {
+                    AddSystemMessage("✅ Nenhum conflito detectado no conhecimento!");
+                    MessageBox.Show(
+                        "Não há conflitos no conhecimento validado.",
+                        "Sem Conflitos",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                    return;
+                }
+
+                AddSystemMessage($"⚠️ Detectados {conflicts.Count} conflito(s)!");
+                await ShowConflictResolutionDialog(conflicts);
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"❌ Erro ao detectar conflitos: {ex.Message}");
+            }
+            finally
+            {
+                StatusText.Text = "Sistema pronto";
+            }
+        }
+
+        private async void ShowLearningHistory_Click(object sender, RoutedEventArgs e)
+        {
+            StatusText.Text = "Carregando histórico...";
+
+            try
+            {
+                var history = await _context.FactHistory
+                    .Include(h => h.Fact)
+                    .OrderByDescending(h => h.ChangedAt)
+                    .Take(100)
+                    .ToListAsync();
+
+                var viewer = new HistoryViewerDialog(history)
+                {
+                    Owner = this
+                };
+
+                viewer.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"❌ Erro ao carregar histórico: {ex.Message}");
+            }
+            finally
+            {
+                StatusText.Text = "Sistema pronto";
+            }
+        }
+
+        private async void ShowStats_Click(object sender, RoutedEventArgs e)
+        {
+            StatusText.Text = "Calculando estatísticas...";
+
+            try
+            {
+                var stats = await CalculateDetailedStats();
+                var statsDialog = new StatsDialog(stats)
+                {
+                    Owner = this
+                };
+
+                statsDialog.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"❌ Erro ao calcular estatísticas: {ex.Message}");
+            }
+            finally
+            {
+                StatusText.Text = "Sistema pronto";
+            }
+        }
+
+        private async Task<DetailedStats> CalculateDetailedStats()
+        {
+            return new DetailedStats
+            {
+                TotalValidated = await _context.Facts.CountAsync(f => f.Status == FactStatus.VALIDATED),
+                TotalCandidates = await _context.Facts.CountAsync(f => f.Status == FactStatus.CANDIDATE),
+                TotalRejected = await _context.Facts.CountAsync(f => f.Status == FactStatus.REJECTED),
+                TotalDeprecated = await _context.Facts.CountAsync(f => f.Status == FactStatus.DEPRECATED),
+                TotalConflicts = await _context.FactConflicts.CountAsync(c => !c.IsResolved),
+                AverageConfidence = await _context.Facts
+                    .Where(f => f.Status == FactStatus.VALIDATED)
+                    .AverageAsync(f => (double?)f.Confidence) ?? 0.0,
+                ValidationStats = await _validationService.GetValidationStats(),
+                SourceDistribution = await _context.FactSources
+                    .GroupBy(s => s.Type)
+                    .Select(g => new { Type = g.Key, Count = g.Count() })
+                    .ToDictionaryAsync(x => x.Type.ToString(), x => x.Count)
             };
-
-            if (dialog.ShowDialog() == true)
-            {
-                try
-                {
-                    StatusText.Text = "Importando arquivo...";
-                    var content = await File.ReadAllTextAsync(dialog.FileName);
-                    var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
-                    int learned = 0;
-                    foreach (var line in lines)
-                    {
-                        var trimmed = line.Trim();
-                        if (trimmed.Length > 5)
-                        {
-                            await _engine.ProcessInput(trimmed);
-                            learned++;
-                        }
-                    }
-
-                    AddSystemMessage($"✅ Arquivo importado! Aprendi {learned} novos conceitos.");
-                    await UpdateStatistics();
-                }
-                catch (Exception ex)
-                {
-                    AddSystemMessage($"❌ Erro ao importar: {ex.Message}");
-                }
-                finally
-                {
-                    StatusText.Text = "Sistema pronto.";
-                }
-            }
-        }
-
-        private async void ExportKnowledge_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new SaveFileDialog
-            {
-                Filter = "JSON|*.json|Texto|*.txt",
-                Title = "Exportar Conhecimento",
-                FileName = $"conhecimento_{DateTime.Now:yyyyMMdd_HHmmss}"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                try
-                {
-                    StatusText.Text = "Exportando conhecimento...";
-
-                    var knowledge = new
-                    {
-                        ExportedAt = DateTime.Now,
-                        Statistics = await _engine.GetStatistics(),
-                        Concepts = _context.Concepts.Select(c => new { c.Name, c.CreatedAt }).ToList(),
-                        Instances = _context.Instances.Select(i => new { i.Name, ConceptId = i.ConceptId }).ToList(),
-                        Properties = _context.InstanceProperties.Select(p => new {
-                            p.PropertyName,
-                            p.PropertyValue
-                        }).ToList()
-                    };
-
-                    var json = JsonConvert.SerializeObject(knowledge, Formatting.Indented);
-                    await File.WriteAllTextAsync(dialog.FileName, json);
-
-                    AddSystemMessage($"✅ Conhecimento exportado para: {Path.GetFileName(dialog.FileName)}");
-                }
-                catch (Exception ex)
-                {
-                    AddSystemMessage($"❌ Erro ao exportar: {ex.Message}");
-                }
-                finally
-                {
-                    StatusText.Text = "Sistema pronto.";
-                }
-            }
-        }
-
-        private void ClearChat_Click(object sender, RoutedEventArgs e)
-        {
-            var result = MessageBox.Show(
-                "Tem certeza que deseja limpar o chat? (O conhecimento será preservado)",
-                "Confirmar",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
-            {
-                ChatPanel.Children.Clear();
-                AddSystemMessage("Chat limpo. Conhecimento preservado.");
-            }
         }
 
         private async void RunTests_Click(object sender, RoutedEventArgs e)
         {
-            // Criar janela para mostrar os resultados dos testes
             var testWindow = new Window
             {
                 Title = "Testes do Sistema Epistêmico",
@@ -316,25 +554,18 @@ namespace SmartAI
 
             scrollViewer.Content = textBox;
             testWindow.Content = scrollViewer;
-
-            // Mostrar janela
             testWindow.Show();
 
-            // Redirecionar Console.WriteLine para a TextBox
             var originalOut = Console.Out;
             var writer = new StringWriter();
             Console.SetOut(writer);
 
             try
             {
-                // Executar os testes
                 textBox.Text = "Iniciando testes...\n\n";
                 await Task.Run(async () => await SmartAI.Tests.EpistemicSystemTests.RunAllTests());
 
-                // Mostrar resultados
                 textBox.Text = writer.ToString();
-
-                // Auto-scroll para o final
                 scrollViewer.ScrollToEnd();
             }
             catch (Exception ex)
@@ -343,56 +574,57 @@ namespace SmartAI
             }
             finally
             {
-                // Restaurar Console original
                 Console.SetOut(originalOut);
             }
         }
 
-        // Métodos para os novos eventos do XAML (implementação básica)
-        private void ShowStats_Click(object sender, RoutedEventArgs e)
+        private void ClearChat_Click(object sender, RoutedEventArgs e)
         {
-            AddSystemMessage("📊 Exibindo estatísticas do sistema...");
-            // Implementação futura: mostrar janela detalhada de estatísticas
-        }
+            var result = MessageBox.Show(
+                "Tem certeza que deseja limpar o chat?\n(O conhecimento será preservado)",
+                "Confirmar",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
 
-        private void CheckConflicts_Click(object sender, RoutedEventArgs e)
-        {
-            AddSystemMessage("⚠️ Verificando conflitos no conhecimento...");
-            // Implementação futura: verificação de conflitos
-        }
-
-        private void ShowValidatedFacts_Click(object sender, RoutedEventArgs e)
-        {
-            AddSystemMessage("📚 Exibindo fatos validados...");
-            // Implementação futura: mostrar lista de fatos validados
-        }
-
-        private void ShowCandidateFacts_Click(object sender, RoutedEventArgs e)
-        {
-            AddSystemMessage("⏳ Exibindo fatos candidatos...");
-            // Implementação futura: mostrar lista de candidatos
-        }
-
-        private void ShowLearningHistory_Click(object sender, RoutedEventArgs e)
-        {
-            AddSystemMessage("🗂️ Exibindo histórico de aprendizado...");
-            // Implementação futura: mostrar histórico
+            if (result == MessageBoxResult.Yes)
+            {
+                ChatPanel.Children.Clear();
+                AddSystemMessage("Chat limpo. Conhecimento preservado.");
+            }
         }
 
         private void About_Click(object sender, RoutedEventArgs e)
         {
-            AddSystemMessage("ℹ️ Sistema Epistêmico SmartAI v1.0\n" +
-                            "Sistema cognitivo com validação epistêmica e aprendizado contínuo.");
+            MessageBox.Show(
+                "🧠 Anacreon - Sistema Cognitivo Epistêmico\n\n" +
+                "Versão: 2.0 (Refatoração Epistêmica)\n\n" +
+                "Características:\n" +
+                "• Conhecimento sempre rastreável\n" +
+                "• Validação humana obrigatória\n" +
+                "• Confiança sempre < 100%\n" +
+                "• Detecção automática de conflitos\n" +
+                "• Histórico imutável de mudanças\n" +
+                "• Separação código vs conhecimento factual\n\n" +
+                "Desenvolvido como experimento em IA epistêmica.",
+                "Sobre o Sistema",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
         }
 
         private void ShowCommands_Click(object sender, RoutedEventArgs e)
         {
-            AddSystemMessage("📖 Comandos disponíveis:\n" +
-                            "• aprender: [fato] - Ensina um novo fato\n" +
-                            "• pesquisar: [termo] - Busca na web\n" +
-                            "• estatísticas - Mostra estatísticas\n" +
-                            "• verificar conflitos - Verifica inconsistências\n" +
-                            "• limpar - Limpa o chat");
+            AddSystemMessage(
+                "📖 COMANDOS DISPONÍVEIS\n\n" +
+                "🔍 CONSULTA:\n" +
+                "• 'O que é X?' - Buscar conhecimento validado\n" +
+                "• 'Pesquisar: termo' - Investigar na web\n\n" +
+                "📚 ENSINO:\n" +
+                "• 'X é Y' - Propor novo fato (requer validação)\n" +
+                "• 'X tem Y' - Adicionar propriedade\n\n" +
+                "⚙️ SISTEMA:\n" +
+                "• 'verificar conflitos' - Detectar contradições\n" +
+                "• 'estatísticas' - Ver métricas do sistema\n\n" +
+                "💡 DICA: Todo conhecimento passa por validação humana!");
         }
 
         private void Exit_Click(object sender, RoutedEventArgs e)
@@ -467,7 +699,7 @@ namespace SmartAI
             var headerStack = new StackPanel { Orientation = Orientation.Horizontal };
             headerStack.Children.Add(new TextBlock
             {
-                Text = "Smart AI",
+                Text = "Anacreon",
                 FontWeight = FontWeights.Bold,
                 Foreground = new SolidColorBrush(Color.FromRgb(78, 201, 176)),
                 FontSize = 12,
@@ -535,48 +767,54 @@ namespace SmartAI
 
         private async Task UpdateStatistics()
         {
-            var stats = await _engine.GetStatistics();
-
-            // Atualizar estatísticas na barra de status
-            ModeIndicator.Text = "Modo: ANSWER";
-            FactCount.Text = $"Fatos: {stats["Concepts"]}";
-
-            // Atualizar estatísticas no painel lateral
-            CurrentModeText.Text = "ANSWER";
-            ValidatedFactsCountText.Text = stats["Concepts"].ToString();
-            CandidatesCountText.Text = stats["Instances"].ToString();
-
-            var conflicts = 0; // Implementar contagem de conflitos futuramente
-            ConflictIndicator.Text = $"Conflitos: {conflicts}";
-            ConflictsCountText.Text = conflicts.ToString();
-
-            // Atualizar aprendizado recente
-            RecentLearningPanel.Children.Clear();
-            var recent = await _engine.GetRecentLearning(5);
-
-            if (recent.Any())
+            try
             {
-                foreach (var item in recent)
+                var validatedCount = await _context.Facts.CountAsync(f => f.Status == FactStatus.VALIDATED);
+                var candidateCount = await _context.Facts.CountAsync(f => f.Status == FactStatus.CANDIDATE);
+                var conflictCount = await _context.FactConflicts.CountAsync(c => !c.IsResolved);
+
+                FactCount.Text = $"Fatos: {validatedCount}";
+                ValidatedFactsCountText.Text = validatedCount.ToString();
+                CandidatesCountText.Text = candidateCount.ToString();
+                ConflictIndicator.Text = $"Conflitos: {conflictCount}";
+                ConflictsCountText.Text = conflictCount.ToString();
+
+                // Atualizar aprendizado recente
+                RecentLearningPanel.Children.Clear();
+                var recentFacts = await _context.Facts
+                    .Where(f => f.Status == FactStatus.VALIDATED)
+                    .OrderByDescending(f => f.ValidatedAt)
+                    .Take(5)
+                    .ToListAsync();
+
+                if (recentFacts.Any())
                 {
-                    var textBlock = new TextBlock
+                    foreach (var fact in recentFacts)
                     {
-                        Text = $"• {item}",
-                        Foreground = Brushes.LightGray,
-                        FontSize = 12,
-                        TextWrapping = TextWrapping.Wrap,
-                        Margin = new Thickness(0, 2, 0, 2)
-                    };
-                    RecentLearningPanel.Children.Add(textBlock);
+                        var textBlock = new TextBlock
+                        {
+                            Text = $"• {fact.Subject} {fact.Relation} {fact.Object}",
+                            Foreground = Brushes.LightGray,
+                            FontSize = 12,
+                            TextWrapping = TextWrapping.Wrap,
+                            Margin = new Thickness(0, 2, 0, 2)
+                        };
+                        RecentLearningPanel.Children.Add(textBlock);
+                    }
+                }
+                else
+                {
+                    RecentLearningPanel.Children.Add(new TextBlock
+                    {
+                        Text = "Nenhum aprendizado recente",
+                        Foreground = Brushes.Gray,
+                        FontSize = 12
+                    });
                 }
             }
-            else
+            catch (Exception ex)
             {
-                RecentLearningPanel.Children.Add(new TextBlock
-                {
-                    Text = "Nenhum aprendizado recente",
-                    Foreground = Brushes.Gray,
-                    FontSize = 12
-                });
+                Console.WriteLine($"Erro ao atualizar estatísticas: {ex.Message}");
             }
         }
     }
@@ -587,5 +825,17 @@ namespace SmartAI
         public string Sender { get; set; } = string.Empty;
         public bool IsUser { get; set; }
         public string Timestamp { get; set; } = string.Empty;
+    }
+
+    public class DetailedStats
+    {
+        public int TotalValidated { get; set; }
+        public int TotalCandidates { get; set; }
+        public int TotalRejected { get; set; }
+        public int TotalDeprecated { get; set; }
+        public int TotalConflicts { get; set; }
+        public double AverageConfidence { get; set; }
+        public ValidationStats? ValidationStats { get; set; }
+        public System.Collections.Generic.Dictionary<string, int>? SourceDistribution { get; set; }
     }
 }
