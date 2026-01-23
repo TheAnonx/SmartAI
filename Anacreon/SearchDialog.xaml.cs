@@ -16,8 +16,8 @@ namespace SmartAI
 
         private void SearchTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            // Método exigido pelo XAML.
-            // Pode permanecer vazio.
+            
+            ErrorMessage.Visibility = Visibility.Collapsed;
         }
 
         private void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
@@ -49,12 +49,14 @@ namespace SmartAI
 
             if (string.IsNullOrWhiteSpace(query))
             {
-                MessageBox.Show(
-                    "Por favor, digite algo para buscar!",
-                    "Campo vazio",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                SearchTextBox.Focus();
+                if (string.IsNullOrWhiteSpace(query))
+                {
+                    ErrorMessage.Text = "⚠️ Digite algo para buscar.";
+                    ErrorMessage.Visibility = Visibility.Visible;
+                    SearchTextBox.Focus();
+                    return;
+                }
+
                 return;
             }
 

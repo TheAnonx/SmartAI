@@ -25,6 +25,18 @@ namespace SmartAI
         private readonly ValidationService _validationService;
         private readonly ConflictDetectionService _conflictService;
         private readonly FactService _factService;
+        private enum PendingChoice
+        {
+            None,
+            System,
+            Investigation
+        }
+
+        private PendingChoice _pendingChoice = PendingChoice.None;
+        private Func<int, Task>? _choiceHandler;
+        private bool _inputLocked = false;
+
+
 
         private ObservableCollection<ChatMessage> _messages;
         private ObservableCollection<string> _recentLearning;
@@ -80,6 +92,40 @@ namespace SmartAI
         {
             var input = InputTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(input)) return;
+            if (_inputLocked && _pendingChoice == PendingChoice.None)
+            {
+                InputTextBox.Clear();
+                return;
+            }
+
+
+
+            if (_pendingChoice != PendingChoice.None)
+            {
+                AddUserMessage(input);
+
+                if (int.TryParse(input, out int choice) && (choice == 1 || choice == 2))
+                {
+                    var handler = _choiceHandler;
+
+                    _pendingChoice = PendingChoice.None;
+                    _choiceHandler = null;
+                    _inputLocked = false;
+
+                    if (handler != null)
+                        await handler(choice);
+                }
+                else
+                {
+                    AddSystemMessage("Escolha inválida. Digite 1 ou 2.");
+                }
+
+                InputTextBox.Clear();
+                return;
+            }
+
+
+
 
             AddUserMessage(input);
             InputTextBox.Clear();
@@ -91,6 +137,48 @@ namespace SmartAI
             {
                 // USAR COGNITIVE ENGINE
                 var response = await _cognitiveEngine.Process(input);
+
+                if (
+    response.RequiresAction &&
+    response.SuggestedMode == CognitiveMode.INVESTIGATION &&
+    _pendingChoice == PendingChoice.None
+)
+                {
+                    AddAssistantMessage(response.Text);
+
+                    _pendingChoice = PendingChoice.Investigation;
+                    _inputLocked = true;
+
+                    _choiceHandler = async (choice) =>
+                    {
+                        try
+                        {
+                            if (choice == 1)
+                            {
+                                var dialog = new SearchDialog { Owner = this };
+                                if (dialog.ShowDialog() == true &&
+                                    !string.IsNullOrWhiteSpace(dialog.SearchQuery))
+                                {
+                                    AddUserMessage(dialog.SearchQuery);
+                                    await InvestigateWeb(dialog.SearchQuery);
+                                }
+                            }
+                            else
+                            {
+                                AddAssistantMessage("Pode ensinar.");
+                            }
+                        }
+                        finally
+                        {
+                            _inputLocked = false;
+                        }
+                    };
+
+
+
+                    return;
+                }
+
 
                 // Atualizar indicador de modo
                 ModeIndicator.Text = $"Modo: {response.Mode}";
@@ -104,26 +192,10 @@ namespace SmartAI
                     AddAssistantMessage(response.Text);
                     await PresentValidationDialog(response);
                 }
-                // Se sugeriu investigação como opção
-                else if (response.RequiresAction && 
-                         response.SuggestedMode == CognitiveMode.INVESTIGATION)
-                {
-                    // Oferecer investigação
-                    AddAssistantMessage(response.Text);
 
-                    var result = MessageBox.Show(
-                        "Deseja que eu investigue na web?",
-                        "Investigação Web",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Question);
+                
 
-                    if (result == MessageBoxResult.Yes)
-                    {
-                        // Extrair o subject da resposta ou usar o input original
-                        var subject = response.Facts?.FirstOrDefault()?.Subject ?? input;
-                        await InvestigateWeb(subject);
-                    }
-                }
+
                 else
                 {
                     AddAssistantMessage(response.Text);
@@ -207,92 +279,148 @@ namespace SmartAI
                     }
 
                     responseText += $"\n📚 Fonte: {investigationResult.SourceName}\n";
-                    responseText += $"🔗 {investigationResult.SourceUrl}\n\n";
-                    responseText += $"⚠️ **IMPORTANTE**: Estes são CANDIDATOS, não fatos validados.\n";
-                    responseText += $"Você pode validá-los usando o menu 'Conhecimento' → 'Fatos Candidatos'.";
+                    if (!string.IsNullOrEmpty(investigationResult.SourceUrl))
+                    {
+                        responseText += $"🔗 {investigationResult.SourceUrl}\n";
+                    }
+                    responseText += $"\n⚠️ **IMPORTANTE**: Estes são CANDIDATOS, não fatos validados.\n";
 
                     AddAssistantMessage(responseText);
 
-                    // Salvar os fatos candidatos no banco de dados para validação futura
-                    var savedFactsCount = 0;
-                    foreach (var candidate in investigationResult.CandidateFacts)
-                    {
-                        try
-                        {
-                            // Validar dados antes de salvar
-                            var subject = string.IsNullOrWhiteSpace(candidate.Subject) ? "Desconhecido" : candidate.Subject.Trim();
-                            var relation = string.IsNullOrWhiteSpace(candidate.Relation) ? "tem" : candidate.Relation.Trim();
-                            var obj = string.IsNullOrWhiteSpace(candidate.Object) ? "informação desconhecida" : candidate.Object.Trim();
 
-                            // Criar fato candidato real no banco de dados
-                            var fact = new Fact
-                            {
-                                Subject = subject,
-                                Relation = relation,
-                                Object = obj,
-                                Confidence = 0.0,
-                                Status = FactStatus.CANDIDATE,
-                                CreatedAt = DateTime.Now,
-                                Version = 1
-                            };
-
-                            _context.Facts.Add(fact);
-                            await _context.SaveChangesAsync(); // Salvar para obter o ID
-
-                            // Adicionar fonte
-                            var source = new FactSource
-                            {
-                                FactId = fact.Id,
-                                Type = SmartAI.Models.SourceType.WEB, // Especificar namespace completo
-                                Identifier = investigationResult.SourceName ?? "Web Search",
-                                URL = investigationResult.SourceUrl,
-                                TrustWeight = 0.5,
-                                CollectedAt = DateTime.Now
-                            };
-                            _context.FactSources.Add(source);
-
-                            // Adicionar histórico
-                            var history = new FactHistory
-                            {
-                                FactId = fact.Id,
-                                Version = 1,
-                                NewSubject = subject,
-                                NewRelation = relation,
-                                NewObject = obj,
-                                NewConfidence = 0.0,
-                                NewStatus = FactStatus.CANDIDATE,
-                                ChangedBy = "system",
-                                ChangedAt = DateTime.Now,
-                                Reason = "Candidate fact from web search",
-                                ChangeType = ChangeType.CREATED
-                            };
-                            _context.FactHistory.Add(history);
-
-                            await _context.SaveChangesAsync();
-                            savedFactsCount++;
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Erro ao salvar fato candidato: {ex.Message}");
-                            AddSystemMessage($"⚠️ Erro ao salvar fato: {ex.Message}");
-                        }
-                    }
-
-                    AddSystemMessage($"💾 {savedFactsCount} fatos candidatos salvos para validação futura.");
+                    AddAssistantMessage(
+                    "⚠️ Foram encontrados fatos candidatos.\n" +
+                    "Use o menu **Conhecimento → Fatos Candidatos** para validá-los quando desejar."
+                    );
                 }
-                else
+                else if (investigationResult.Success)
                 {
                     var responseText = $"🔍 Pesquisei sobre '{query}', mas não encontrei fatos estruturados.\n\n";
-                    responseText += $"Resumo da busca:\n{investigationResult.RawText}\n\n";
+                    if (!string.IsNullOrEmpty(investigationResult.RawText))
+                    {
+                        responseText += $"Resumo:\n{investigationResult.RawText}\n\n";
+                    }
                     responseText += $"Fonte: {investigationResult.SourceName}";
 
                     AddAssistantMessage(responseText);
+                }
+                else
+                {
+                    AddSystemMessage($"❌ Não consegui encontrar informações sobre '{query}'.");
                 }
             }
             catch (Exception ex)
             {
                 AddSystemMessage($"❌ Erro na investigação: {ex.Message}");
-                Console.WriteLine($"Detalhes do erro: {ex.InnerException?.Message}");
+                Console.WriteLine($"Detalhes do erro: {ex.StackTrace}");
+            }
+            finally
+            {
+                StatusText.Text = "Sistema pronto";
+                await UpdateStatistics();
+            }
+        }
+
+        private async Task<List<Fact>> SaveCandidateFacts(InvestigationResult investigationResult)
+        {
+            var savedFacts = new List<Fact>();
+
+            foreach (var candidate in investigationResult.CandidateFacts)
+            {
+                try
+                {
+                    // Validar dados antes de salvar
+                    var subject = string.IsNullOrWhiteSpace(candidate.Subject) ? "Desconhecido" : candidate.Subject.Trim();
+                    var relation = string.IsNullOrWhiteSpace(candidate.Relation) ? "tem" : candidate.Relation.Trim();
+                    var obj = string.IsNullOrWhiteSpace(candidate.Object) ? "informação desconhecida" : candidate.Object.Trim();
+
+                    // Verificar se já existe
+                    var existing = await _context.Facts
+                        .Where(f => f.Subject == subject &&
+                                    f.Relation == relation &&
+                                    f.Object == obj &&
+                                    f.Status == FactStatus.CANDIDATE)
+                        .FirstOrDefaultAsync();
+
+                    if (existing != null)
+                    {
+                        Console.WriteLine($"Fato candidato já existe: {subject} {relation} {obj}");
+                        savedFacts.Add(existing);
+                        continue;
+                    }
+
+                    // Criar fato candidato usando o serviço
+                    var fact = await _factService.CreateCandidateFact(
+                        subject,
+                        relation,
+                        obj,
+                        candidate.Sources.FirstOrDefault()?.Type ?? SourceType.WEB,
+                        investigationResult.SourceName ?? "Web Search",
+                        investigationResult.SourceUrl
+                    );
+
+                    savedFacts.Add(fact);
+                    Console.WriteLine($"Fato candidato salvo: {subject} {relation} {obj}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Erro ao salvar fato candidato: {ex.Message}");
+                    AddSystemMessage($"⚠️ Erro ao salvar um fato: {ex.Message}");
+                }
+            }
+
+            return savedFacts;
+        }
+
+        private async Task PresentValidationDialogDirect(List<Fact> facts)
+        {
+            try
+            {
+                // Recarregar os fatos do banco com todas as relações
+                var factIds = facts.Select(f => f.Id).ToList();
+                var reloadedFacts = await _context.Facts
+                    .Where(f => factIds.Contains(f.Id))
+                    .Include(f => f.Sources)
+                    .Include(f => f.History)
+                    .ToListAsync();
+
+                var dialog = new ValidationDialog(reloadedFacts)
+                {
+                    Owner = this
+                };
+
+                if (dialog.ShowDialog() == true)
+                {
+                    StatusText.Text = "Processando validação...";
+
+                    // Criar uma sessão temporária
+                    var session = await _validationService.StartValidationSession(
+                        "Direct validation from web search",
+                        reloadedFacts
+                    );
+
+                    // Processar decisões
+                    var result = await _validationService.ProcessUserDecisions(
+                        session.Id,
+                        dialog.Decisions,
+                        "user"
+                    );
+
+                    AddSystemMessage(result.GetSummary());
+                    await UpdateStatistics();
+
+                    // Verificar conflitos
+                    await CheckAndPresentConflicts();
+                }
+                else
+                {
+                    AddSystemMessage("Validação cancelada. Os fatos continuam salvos como candidatos.");
+                }
+            }
+            catch (Exception ex)
+            {
+                AddSystemMessage($"❌ Erro ao validar fatos: {ex.Message}");
+                Console.WriteLine($"Erro detalhado: {ex.StackTrace}");
             }
             finally
             {
@@ -310,17 +438,14 @@ namespace SmartAI
                 ConflictIndicator.Text = $"Conflitos: {conflicts.Count}";
                 ConflictsCountText.Text = conflicts.Count.ToString();
 
-                var result = MessageBox.Show(
-                    $"⚠️ Detectei {conflicts.Count} conflito(s) no conhecimento!\n\n" +
-                    $"Deseja revisar agora?",
-                    "Conflitos Detectados",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning);
-
-                if (result == MessageBoxResult.Yes)
+                var dialog = new ConflictResolutionDialog(conflicts)
                 {
-                    await ShowConflictResolutionDialog(conflicts);
-                }
+                    Owner = this
+                };
+
+                dialog.ShowDialog();
+                await UpdateStatistics();
+
             }
         }
 
@@ -392,11 +517,8 @@ namespace SmartAI
 
                 if (!candidates.Any())
                 {
-                    MessageBox.Show(
-                        "Não há fatos candidatos aguardando validação.",
-                        "Nenhum Candidato",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                    AddAssistantMessage("ℹ️ Não há fatos candidatos aguardando validação.");
+
                     return;
                 }
 
@@ -428,11 +550,7 @@ namespace SmartAI
                 if (!conflicts.Any())
                 {
                     AddSystemMessage("✅ Nenhum conflito detectado no conhecimento!");
-                    MessageBox.Show(
-                        "Não há conflitos no conhecimento validado.",
-                        "Sem Conflitos",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information);
+                    
                     return;
                 }
 
@@ -580,35 +698,51 @@ namespace SmartAI
 
         private void ClearChat_Click(object sender, RoutedEventArgs e)
         {
-            var result = MessageBox.Show(
-                "Tem certeza que deseja limpar o chat?\n(O conhecimento será preservado)",
-                "Confirmar",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
+            AddSystemMessage(
+               "⚠️ Você deseja limpar o chat?\n\n" +
+               "1️⃣ Sim, limpar o chat\n" +
+               "2️⃣ Não, cancelar\n\n" +
+               "Digite **1** ou **2**."
+);
 
-            if (result == MessageBoxResult.Yes)
+            _pendingChoice = PendingChoice.System;
+            _inputLocked = true;
+            _choiceHandler = async (choice) =>
             {
-                ChatPanel.Children.Clear();
-                AddSystemMessage("Chat limpo. Conhecimento preservado.");
-            }
+                if (choice == 1)
+                {
+                    ChatPanel.Children.Clear();
+                    AddSystemMessage("🧹 Chat limpo com sucesso.");
+                }
+                else
+                {
+                    AddSystemMessage("✅ Operação cancelada. Sistema ativo.");
+                }
+
+                _inputLocked = false;
+                await Task.CompletedTask;
+            };
+
+
+
+
+
         }
 
         private void About_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show(
-                "🧠 Anacreon - Sistema Cognitivo Epistêmico\n\n" +
+            AddSystemMessage(
+                "🧠 **Anacreon — Sistema Cognitivo Epistêmico**\n\n" +
                 "Versão: 2.0 (Refatoração Epistêmica)\n\n" +
                 "Características:\n" +
-                "• Conhecimento sempre rastreável\n" +
+                "• Conhecimento rastreável\n" +
                 "• Validação humana obrigatória\n" +
                 "• Confiança sempre < 100%\n" +
                 "• Detecção automática de conflitos\n" +
-                "• Histórico imutável de mudanças\n" +
-                "• Separação código vs conhecimento factual\n\n" +
-                "Desenvolvido como experimento em IA epistêmica.",
-                "Sobre o Sistema",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                "• Histórico imutável\n\n" +
+                "Este sistema opera inteiramente dentro do ambiente conversacional."
+);
+
         }
 
         private void ShowCommands_Click(object sender, RoutedEventArgs e)
@@ -629,16 +763,33 @@ namespace SmartAI
 
         private void Exit_Click(object sender, RoutedEventArgs e)
         {
-            var result = MessageBox.Show(
-                "Deseja realmente sair do sistema?",
-                "Confirmar Saída",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
+            AddSystemMessage(
+                "⚠️ Deseja realmente sair do sistema?\n\n" +
+                "1️⃣ Sim, sair agora\n" +
+                "2️⃣ Não, continuar usando\n\n" +
+                "Digite **1** ou **2**."
+                            );
 
-            if (result == MessageBoxResult.Yes)
+            _pendingChoice = PendingChoice.System;
+            _inputLocked = true;
+            _choiceHandler = async (choice) =>
             {
-                Application.Current.Shutdown();
-            }
+                if (choice == 1)
+                {
+                    AddSystemMessage("👋 Encerrando o sistema...");
+                    Application.Current.Shutdown();
+                }
+                else
+                {
+                    AddSystemMessage("✅ Operação cancelada. Sistema ativo.");
+                    _inputLocked = false;
+                }
+
+                await Task.CompletedTask;
+            };
+
+
+
         }
 
         private void AddUserMessage(string message)
